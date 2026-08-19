@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @radgate/web",
     "dev:api": "npm run dev --workspace @radgate/api",
-    "build": "npm run build --workspace @radgate/shared && npm run build --workspace @radgate/web",
+    "build": "npm run build --workspace @radgate/shared && npm run build --workspace @radgate/web && npm run build --workspace @radgate/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },

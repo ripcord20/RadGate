@@ -11,15 +11,21 @@
     "esModuleInterop": true,
     "sourceMap": true,
     "outDir": "./dist",
+    "rootDir": "./src",
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitOverride": true,
+    /*
+     * `@radgate/shared` sengaja tidak dipetakan ke berkas sumber. Backend memakai hasil
+     * build paket itu lewat node_modules, karena memasukkan sumber di luar `rootDir` ke
+     * dalam program membuat tsc menolak kompilasi. Jalankan `npm run build` di root, yang
+     * membangun shared lebih dulu, sebelum membangun API.
+     */
     "paths": {
-      "@/*": ["./src/*"],
-      "@radgate/shared": ["./../../packages/shared/src/index.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
