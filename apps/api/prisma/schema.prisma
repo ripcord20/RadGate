@@ -1,0 +1,375 @@
+// Skema inti RadGate. Tabel selengkapnya, termasuk hotspot, inventory, jaringan, tiket,
+// dan WhatsApp, dirancang di docs/04-database.md dan ditambahkan mengikuti tahapan pada
+// docs/05-roadmap.md. Yang ada di sini adalah tabel yang sudah disentuh kode: fondasi
+// tenant, akses, wilayah, kuota langganan, antrean job, dan inti pelanggan-tagihan.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  owner
+  admin
+  teknisi
+  reseller
+  biller
+}
+
+enum CustomerStatus {
+  aktif
+  expired
+  berhenti
+  isolir
+}
+
+enum BillingType {
+  prepaid
+  postpaid
+}
+
+enum IpMode {
+  dhcp
+  static
+}
+
+enum InvoiceStatus {
+  unpaid
+  paid
+  overdue
+  debt
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  transfer
+  gateway
+  reseller
+}
+
+enum TaskStatus {
+  pending
+  running
+  success
+  failed
+}
+
+/// Operator ISP. Seluruh tabel operasional bergantung padanya.
+model Tenant {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  companyName String?
+  status      String   @default("aktif")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users         User[]
+  permissions   Permission[]
+  wilayah       Wilayah[]
+  setting       Setting?
+  customers     Customer[]
+  packages      InternetPackage[]
+  invoices      Invoice[]
+  tasks         Task[]
+  subscriptions Subscription[]
+  usages        SubscriptionUsage[]
+
+  @@map("tenants")
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// `null` berarti akses ke seluruh wilayah tenant. Nilai selain null adalah batas keras.
+  wilayahId String?  @db.Uuid
+  wilayah   Wilayah? @relation(fields: [wilayahId], references: [id])
+
+  name         String
+  email        String
+  passwordHash String
+  phone        String?
+  role         Role      @default(admin)
+  mode         String    @default("web")
+  status        String   @default("aktif")
+  lastLoginAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+/// Peta izin per peran per tenant, sehingga tiap operator bisa menyesuaikan kewenangan
+/// tanpa mengubah kode.
+model Permission {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  role      Role
+  module    String
+  canView   Boolean @default(false)
+  canCreate Boolean @default(false)
+  canUpdate Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([tenantId, role, module])
+  @@map("permissions")
+}
+
+model Wilayah {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name String
+  /// Dipakai sebagai awalan kode pelanggan, jadi tidak boleh diubah setelah terpakai.
+  code    String
+  logoUrl String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  customers Customer[]
+  invoices  Invoice[]
+
+  @@unique([tenantId, code])
+  @@map("wilayah")
+}
+
+model Setting {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @unique @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  companyName String  @default("RadGate")
+  logoUrl     String?
+  address     String?
+  phone       String?
+  taxEnabled  Boolean @default(false)
+  taxPercent  Int     @default(0)
+  timezone    String  @default("Asia/Jakarta")
+
+  /// Kredensial payment gateway dan pengaturan lain. Terenkripsi di lapisan aplikasi.
+  secrets Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model InternetPackage {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name      String
+  speedUp   Int
+  speedDown Int
+  /// Rupiah penuh sebagai bilangan bulat. Uang tidak pernah disimpan sebagai float.
+  price           Int
+  mikrotikProfile String?
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+  invoices  Invoice[]
+
+  @@map("internet_packages")
+}
+
+model Customer {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  packageId String          @db.Uuid
+  package   InternetPackage @relation(fields: [packageId], references: [id])
+
+  customerCode String
+  name         String
+  email        String?
+  phone        String
+  nik          String?
+  address      String
+  latitude     Float?
+  longitude    Float?
+
+  pppoeUsername String
+  /// Dienkripsi AES-GCM, bukan di-hash: nilainya perlu dibaca kembali untuk provisioning
+  /// ke Mikrotik. Tidak pernah dikirim ke frontend.
+  pppoePasswordEnc String
+  ipMode           IpMode  @default(dhcp)
+  ipAddress        String?
+
+  appPasswordHash String?
+
+  billingType      BillingType @default(postpaid)
+  installationDate DateTime
+  /// Tanggal dalam bulan (1-31), bukan tanggal penuh, karena tagihan berulang tiap bulan.
+  dueDay          Int
+  installationFee Int            @default(0)
+  discount        Int            @default(0)
+  notes           String?
+  status          CustomerStatus @default(aktif)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  invoices Invoice[]
+
+  @@unique([tenantId, pppoeUsername])
+  @@unique([tenantId, customerCode])
+  @@index([tenantId, wilayahId, status])
+  @@map("customers")
+}
+
+model Invoice {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  packageId String          @db.Uuid
+  package   InternetPackage @relation(fields: [packageId], references: [id])
+
+  invoiceNumber String
+  periodMonth   Int
+  periodYear    Int
+
+  amount   Int
+  discount Int @default(0)
+  tax      Int @default(0)
+  total    Int
+
+  status        InvoiceStatus  @default(unpaid)
+  dueDate       DateTime
+  paidAt        DateTime?
+  paidBy        String?        @db.Uuid
+  paymentMethod PaymentMethod?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Batasan inilah yang membuat generate tagihan idempoten di tingkat database:
+  /// menjalankannya dua kali untuk periode yang sama tidak menghasilkan tagihan ganda.
+  @@unique([tenantId, customerId, periodMonth, periodYear])
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, wilayahId, status])
+  @@map("invoices")
+}
+
+/// Job latar belakang: sinkronisasi Mikrotik, broadcast WhatsApp, generate tagihan,
+/// import Excel, dan polling perangkat.
+model Task {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  type     String
+  payload  Json?
+  status   TaskStatus @default(pending)
+  progress Int        @default(0)
+  total    Int        @default(0)
+  result   Json?
+  error    String?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdBy  String?   @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@map("tasks")
+}
+
+model SubscriptionPlan {
+  id           String  @id @default(uuid()) @db.Uuid
+  name         String
+  priceMonthly Int
+  priceYearly  Int
+  /// Kuota sebagai JSON, misalnya {"customers":1000,"nas":24}. Bentuk ini membuat
+  /// penambahan jenis kuota baru tidak memerlukan migrasi.
+  limits   Json
+  features Json?
+  isActive Boolean @default(true)
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  planId String           @db.Uuid
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  status       String   @default("aktif")
+  startedAt    DateTime @default(now())
+  expiresAt    DateTime
+  autoRenew    Boolean  @default(true)
+  billingCycle String   @default("monthly")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@map("subscriptions")
+}
+
+/// Pemakaian kuota. Diperbarui job berkala, bukan dihitung ulang dengan COUNT(*) pada
+/// setiap permintaan, karena endpoint bootstrap dipanggil di setiap sesi.
+model SubscriptionUsage {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  metric      String
+  used        Int      @default(0)
+  periodStart DateTime
+  periodEnd   DateTime
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, metric])
+  @@map("subscription_usage")
+}

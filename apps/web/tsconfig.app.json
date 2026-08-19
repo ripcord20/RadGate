@@ -10,6 +10,12 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"],
+      // Diarahkan ke sumber, sama seperti alias Vite, supaya typecheck web tidak
+      // bergantung pada hasil build packages/shared.
+      "@radgate/shared": ["../../packages/shared/src/index.ts"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -17,6 +23,8 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    /*
+     * Keluaran CommonJS supaya bisa dipakai backend NestJS. Frontend tidak memakai hasil
+     * build ini: Vite dan tsc pada apps/web diarahkan langsung ke berkas sumber lewat
+     * alias, jadi perubahan di sini langsung terasa saat dev tanpa build ulang.
+     */
+    "module": "node16",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src"]
+}
