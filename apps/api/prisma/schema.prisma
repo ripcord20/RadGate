@@ -72,12 +72,34 @@ model Tenant {
   permissions   Permission[]
   wilayah       Wilayah[]
   setting       Setting?
-  customers     Customer[]
-  packages      InternetPackage[]
-  invoices      Invoice[]
-  tasks         Task[]
-  subscriptions Subscription[]
-  usages        SubscriptionUsage[]
+  customers           Customer[]
+  packages            InternetPackage[]
+  invoices            Invoice[]
+  tasks               Task[]
+  subscriptions       Subscription[]
+  usages              SubscriptionUsage[]
+  financeCategories   FinanceCategory[]
+  financeTransactions FinanceTransaction[]
+  tickets             Ticket[]
+  inventoryCategories InventoryCategory[]
+  inventoryItems      InventoryItem[]
+  nas                 Nas[]
+  resellers           Reseller[]
+  mikrotikDevices     MikrotikDevice[]
+  odp                 Odp[]
+  hotspotProfiles     HotspotProfile[]
+  hotspotVouchers     HotspotVoucher[]
+  whatsappDevices     WhatsappDevice[]
+  whatsappTemplates   WhatsappTemplate[]
+  whatsappBroadcasts  WhatsappBroadcast[]
+  whatsappMessages    WhatsappMessage[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+  accountOfficers     AccountOfficer[]
+  reportSnapshots     ReportDailySnapshot[]
+  paymentTransactions PaymentTransaction[]
+  withdrawals         Withdrawal[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@map("tenants")
 }
@@ -103,6 +125,9 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  notifications Notification[]
+  activityLogs  ActivityLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
@@ -143,9 +168,19 @@ model Wilayah {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[]
-  customers Customer[]
-  invoices  Invoice[]
+  users                 User[]
+  customers             Customer[]
+  invoices              Invoice[]
+  financeTransactions   FinanceTransaction[]
+  tickets               Ticket[]
+  inventoryItems        InventoryItem[]
+  nas                   Nas[]
+  resellers             Reseller[]
+  mikrotikDevices       MikrotikDevice[]
+  odp                   Odp[]
+  hotspotVouchers       HotspotVoucher[]
+  accountOfficers       AccountOfficer[]
+  paymentTransactions   PaymentTransaction[]
 
   @@unique([tenantId, code])
   @@map("wilayah")
@@ -236,11 +271,26 @@ model Customer {
   notes           String?
   status          CustomerStatus @default(aktif)
 
+  resellerId String?   @db.Uuid
+  reseller   Reseller? @relation(fields: [resellerId], references: [id])
+
+  odpId String? @db.Uuid
+  odp   Odp?    @relation(fields: [odpId], references: [id])
+
+  nasId String? @db.Uuid
+  nas   Nas?    @relation(fields: [nasId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   deletedAt DateTime?
 
-  invoices Invoice[]
+  invoices          Invoice[]
+  tickets           Ticket[]
+  sessions          CustomerSession[]
+  loginAnomalies    LoginAnomaly[]
+  speedOnDemand     SpeedOnDemand[]
+  officerLinks      AccountOfficerCustomer[]
+  whatsappMessages  WhatsappMessage[]
 
   @@unique([tenantId, pppoeUsername])
   @@unique([tenantId, customerCode])
@@ -281,6 +331,10 @@ model Invoice {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  payments            InvoicePayment[]
+  paymentTransactions PaymentTransaction[]
+  resellerTx          ResellerTransaction[]
 
   /// Batasan inilah yang membuat generate tagihan idempoten di tingkat database:
   /// menjalankannya dua kali untuk periode yang sama tidak menghasilkan tagihan ganda.
@@ -351,6 +405,8 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  invoices SubscriptionInvoice[]
+
   @@index([tenantId, status])
   @@map("subscriptions")
 }
@@ -373,3 +429,744 @@ model SubscriptionUsage {
   @@unique([tenantId, metric])
   @@map("subscription_usage")
 }
+
+enum FinanceType {
+  income
+  expense
+}
+
+enum TicketStatus {
+  baru
+  proses
+  selesai
+}
+
+enum TicketPriority {
+  rendah
+  sedang
+  tinggi
+  urgent
+}
+
+enum InventoryMovement {
+  in
+  out
+}
+
+model FinanceCategory {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name     String
+  type     FinanceType
+  isActive Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions FinanceTransaction[]
+
+  @@index([tenantId, type])
+  @@map("finance_categories")
+}
+
+model FinanceTransaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String?  @db.Uuid
+  wilayah   Wilayah? @relation(fields: [wilayahId], references: [id])
+
+  categoryId String          @db.Uuid
+  category   FinanceCategory @relation(fields: [categoryId], references: [id])
+
+  type            FinanceType
+  amount          Int
+  description     String
+  transactionDate DateTime
+  referenceType   String?
+  referenceId     String?   @db.Uuid
+  createdBy       String?   @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, transactionDate])
+  @@map("finance_transactions")
+}
+
+model Ticket {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  ticketNumber String
+  title        String
+  description  String
+  category     String?
+  priority     TicketPriority @default(sedang)
+  status       TicketStatus   @default(baru)
+  assignedTo   String?        @db.Uuid
+  resolvedAt   DateTime?
+  createdBy    String?        @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments TicketComment[]
+
+  @@unique([tenantId, ticketNumber])
+  @@index([tenantId, wilayahId, status])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id String @id @default(uuid()) @db.Uuid
+
+  ticketId String @db.Uuid
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  userId  String @db.Uuid
+  comment String
+
+  createdAt DateTime @default(now())
+
+  @@map("ticket_comments")
+}
+
+model InventoryCategory {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name String
+
+  items InventoryItem[]
+
+  @@unique([tenantId, name])
+  @@map("inventory_categories")
+}
+
+model InventoryItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String?  @db.Uuid
+  wilayah   Wilayah? @relation(fields: [wilayahId], references: [id])
+
+  categoryId String            @db.Uuid
+  category   InventoryCategory @relation(fields: [categoryId], references: [id])
+
+  code        String
+  name        String
+  unit        String
+  stock       Int     @default(0)
+  unitPrice   Int     @default(0)
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions InventoryTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, wilayahId])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  itemId String        @db.Uuid
+  item   InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  type          InventoryMovement
+  quantity      Int
+  stockAfter    Int
+  referenceType String?
+  referenceId   String?  @db.Uuid
+  notes         String?
+  createdBy     String?  @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId, createdAt])
+  @@map("inventory_transactions")
+}
+
+model Nas {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  name      String
+  ipAddress String
+  secretEnc String
+  type      String  @default("mikrotik")
+  isDefault Boolean @default(false)
+  status    String  @default("offline")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers       Customer[]
+  portForwardings PortForwarding[]
+  sessions        CustomerSession[]
+  hotspotSessions HotspotSession[]
+
+  @@index([tenantId, wilayahId])
+  @@map("nas")
+}
+
+model InvoicePayment {
+  id String @id @default(uuid()) @db.Uuid
+
+  invoiceId String  @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  amount     Int
+  method     PaymentMethod
+  paidAt     DateTime
+  receivedBy String?        @db.Uuid
+  reference  String?
+  notes      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@map("invoice_payments")
+}
+
+model ReportDailySnapshot {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  date    DateTime @db.Date
+  metrics Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@map("report_daily_snapshots")
+}
+
+model Reseller {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  name            String
+  phone           String
+  type            String
+  commissionType  String
+  /// Persen 0–100 atau rupiah penuh, tergantung `commissionType`.
+  commissionValue Int
+  balance         Int    @default(0)
+  status          String @default("aktif")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers    Customer[]
+  transactions ResellerTransaction[]
+  vouchers     HotspotVoucher[]
+
+  @@index([tenantId, wilayahId])
+  @@map("resellers")
+}
+
+model ResellerTransaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  resellerId String   @db.Uuid
+  reseller   Reseller @relation(fields: [resellerId], references: [id], onDelete: Cascade)
+
+  invoiceId String?  @db.Uuid
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  type         String
+  amount       Int
+  balanceAfter Int
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([resellerId, createdAt])
+  @@map("reseller_transactions")
+}
+
+model MikrotikDevice {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  name        String
+  host        String
+  port        Int    @default(8728)
+  username    String
+  passwordEnc String
+  apiType     String @default("routeros")
+  version     String?
+  status      String @default("offline")
+  lastSyncAt  DateTime?
+  syncError   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, wilayahId])
+  @@map("mikrotik_devices")
+}
+
+model PortForwarding {
+  id String @id @default(uuid()) @db.Uuid
+
+  nasId String @db.Uuid
+  nas   Nas    @relation(fields: [nasId], references: [id], onDelete: Cascade)
+
+  name         String
+  protocol     String @default("tcp")
+  externalPort Int
+  internalIp   String
+  internalPort Int
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("port_forwarding")
+}
+
+model Odp {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  name       String
+  code       String
+  latitude   Float
+  longitude  Float
+  capacity   Int
+  usedPorts  Int     @default(0)
+  parentOdcId String? @db.Uuid
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, wilayahId])
+  @@map("odp")
+}
+
+model HotspotProfile {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name            String
+  mikrotikProfile String?
+  speedUp         Int
+  speedDown       Int
+  durationMinutes Int
+  dataQuotaMb     Int?
+  price           Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vouchers HotspotVoucher[]
+
+  @@map("hotspot_profiles")
+}
+
+model HotspotVoucher {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  profileId String         @db.Uuid
+  profile   HotspotProfile @relation(fields: [profileId], references: [id])
+
+  resellerId String?   @db.Uuid
+  reseller   Reseller? @relation(fields: [resellerId], references: [id])
+
+  code      String
+  password  String
+  batchId   String   @db.Uuid
+  status    String   @default("unused")
+  usedAt    DateTime?
+  expiresAt DateTime?
+  soldAt    DateTime?
+  soldPrice Int?
+
+  createdAt DateTime @default(now())
+
+  sessions HotspotSession[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, batchId])
+  @@index([tenantId, wilayahId, status])
+  @@map("hotspot_vouchers")
+}
+
+model HotspotSession {
+  id String @id @default(uuid()) @db.Uuid
+
+  voucherId String         @db.Uuid
+  voucher   HotspotVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  nasId String? @db.Uuid
+  nas   Nas?    @relation(fields: [nasId], references: [id])
+
+  macAddress String?
+  ipAddress  String?
+  startedAt  DateTime @default(now())
+  endedAt    DateTime?
+  bytesIn    BigInt   @default(0)
+  bytesOut   BigInt   @default(0)
+
+  @@index([voucherId, startedAt])
+  @@map("hotspot_sessions")
+}
+
+model WhatsappDevice {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name            String
+  phoneNumber     String
+  provider        String  @default("internal")
+  sessionDataEnc  String?
+  status          String  @default("disconnected")
+  lastConnectedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  broadcasts WhatsappBroadcast[]
+  messages   WhatsappMessage[]
+
+  @@index([tenantId])
+  @@map("whatsapp_devices")
+}
+
+model WhatsappTemplate {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name      String
+  content   String
+  variables Json?
+  category  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  broadcasts WhatsappBroadcast[]
+
+  @@map("whatsapp_templates")
+}
+
+model WhatsappBroadcast {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  templateId String           @db.Uuid
+  template   WhatsappTemplate @relation(fields: [templateId], references: [id])
+
+  deviceId String         @db.Uuid
+  device   WhatsappDevice @relation(fields: [deviceId], references: [id])
+
+  targetFilter Json
+  totalTargets Int    @default(0)
+  sentCount    Int    @default(0)
+  failedCount  Int    @default(0)
+  status       String @default("queued")
+  taskId       String? @db.Uuid
+  scheduledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@map("whatsapp_broadcasts")
+}
+
+model WhatsappMessage {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  deviceId String?         @db.Uuid
+  device   WhatsappDevice? @relation(fields: [deviceId], references: [id])
+
+  customerId String?   @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  phoneNumber String
+  direction   String
+  content     String
+  status      String   @default("queued")
+  error       String?
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, phoneNumber])
+  @@map("whatsapp_messages")
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type   String
+  title  String
+  body   String
+  data   Json?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id])
+
+  action      String
+  module      String
+  referenceId String?
+  changes     Json?
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("activity_logs")
+}
+
+model SubscriptionInvoice {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  subscriptionId String       @db.Uuid
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  invoiceNumber     String
+  amount            Int
+  status            String    @default("unpaid")
+  dueDate           DateTime
+  paidAt            DateTime?
+  paymentReference  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, invoiceNumber])
+  @@map("subscription_invoices")
+}
+
+model AccountOfficer {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String  @db.Uuid
+  wilayah   Wilayah @relation(fields: [wilayahId], references: [id])
+
+  userId String? @db.Uuid
+  name   String
+  phone  String
+  status String  @default("aktif")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers AccountOfficerCustomer[]
+
+  @@index([tenantId, wilayahId])
+  @@map("account_officers")
+}
+
+model AccountOfficerCustomer {
+  id String @id @default(uuid()) @db.Uuid
+
+  accountOfficerId String         @db.Uuid
+  accountOfficer   AccountOfficer @relation(fields: [accountOfficerId], references: [id], onDelete: Cascade)
+
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  @@unique([accountOfficerId, customerId])
+  @@map("account_officer_customers")
+}
+
+model SpeedOnDemand {
+  id String @id @default(uuid()) @db.Uuid
+
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  speedUp   Int
+  speedDown Int
+  price     Int
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String   @default("aktif")
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId, status])
+  @@map("speed_on_demand")
+}
+
+model LoginAnomaly {
+  id String @id @default(uuid()) @db.Uuid
+
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  type        String
+  detail      Json?
+  detectedAt  DateTime @default(now())
+  isResolved  Boolean  @default(false)
+
+  @@index([customerId, detectedAt])
+  @@map("login_anomalies")
+}
+
+model CustomerSession {
+  id String @id @default(uuid()) @db.Uuid
+
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  nasId String? @db.Uuid
+  nas   Nas?    @relation(fields: [nasId], references: [id])
+
+  ipAddress       String?
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  bytesIn         BigInt   @default(0)
+  bytesOut        BigInt   @default(0)
+  terminateCause  String?
+
+  @@index([customerId, startedAt])
+  @@map("customer_sessions")
+}
+
+model PaymentTransaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  wilayahId String?  @db.Uuid
+  wilayah   Wilayah? @relation(fields: [wilayahId], references: [id])
+
+  invoiceId String?  @db.Uuid
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  gateway    String
+  reference  String
+  method     String
+  amount     Int
+  fee        Int     @default(0)
+  netAmount  Int
+  status     String  @default("pending")
+  isWithdrawn Boolean @default(false)
+  withdrawalId String? @db.Uuid
+  paidAt     DateTime?
+  rawCallback Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, reference])
+  @@index([tenantId, status])
+  @@map("payment_transactions")
+}
+
+model Withdrawal {
+  id String @id @default(uuid()) @db.Uuid
+
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  amount      Int
+  bankAccount String
+  status      String   @default("pending")
+  requestedAt DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([tenantId, status])
+  @@map("withdrawals")
+}
+

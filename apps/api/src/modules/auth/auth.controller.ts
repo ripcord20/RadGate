@@ -1,8 +1,9 @@
-import { Body, Controller, HttpCode, Post, Req, Res, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Req, Res, UsePipes } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
-import { loginSchema, type LoginInput } from '@radgate/shared';
-import { Public } from '../../common/decorators';
+import { loginSchema, profilePatchSchema, type LoginInput, type ProfilePatchInput } from '@radgate/shared';
+import { CurrentUser, Public } from '../../common/decorators';
+import type { RequestScope } from '../../common/request-context';
 import { ZodValidationPipe } from '../../common/zod-validation.pipe';
 import { AuthService } from './auth.service';
 
@@ -42,6 +43,24 @@ export class AuthController {
   @HttpCode(204)
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie(REFRESH_COOKIE, this.cookieOptions());
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(200)
+  forgotPassword() {
+    return { ok: true };
+  }
+
+  @Get('me')
+  me(@CurrentUser() scope: RequestScope | undefined) {
+    return this.auth.profile(scope);
+  }
+
+  @Patch('me')
+  @UsePipes(new ZodValidationPipe(profilePatchSchema))
+  updateMe(@CurrentUser() scope: RequestScope | undefined, @Body() body: ProfilePatchInput) {
+    return this.auth.updateProfile(scope, body);
   }
 
   /**

@@ -6,10 +6,15 @@ dengan wilayah, paket, pelanggan, dan kuota langganannya sendiri.
 
 ## Status
 
-Fondasi sudah berjalan, modul bisnis belum. Yang sudah ada adalah kerangka aplikasi
-lengkap dengan 16 modul dan 66 route yang bisa dijelajahi, ditambah empat lapis
-lintas-modul yang mahal kalau ditambahkan belakangan. Halaman modulnya sendiri masih
-menampilkan rencana kolom, aksi, dan endpoint, bukan data.
+Modul bisnis sudah punya API dan UI CRUD: pelanggan, tagihan, keuangan, inventory,
+jaringan (NAS/Mikrotik stub), hotspot, tiket, reseller, WhatsApp (gateway stub),
+laporan, payment gateway (provider stub), dan langganan platform.
+
+Integrasi perangkat sungguhan belum dipasang di VPS billing: FreeRADIUS, GenieACS,
+gateway WhatsApp Baileys, tile peta, dan portal pelanggan tetap layanan terpisah.
+
+Pasang di VPS mengikuti [`docs/06-deployment.md`](./docs/06-deployment.md). Pembaruan
+kode: `scripts/deploy.sh`.
 
 ## Menjalankan
 
@@ -44,10 +49,12 @@ sehingga aturan validasi tidak bisa berbeda antara keduanya.
 | [`docs/03-api.md`](./docs/03-api.md) | Kontrak REST API per modul |
 | [`docs/04-database.md`](./docs/04-database.md) | Skema tabel dan relasi |
 | [`docs/05-roadmap.md`](./docs/05-roadmap.md) | Urutan pengerjaan bertahap |
+| [`docs/06-deployment.md`](./docs/06-deployment.md) | Ubuntu, RAM/CPU, PostgreSQL, systemd, Nginx |
 
 Mulai dari `docs/01-arsitektur.md`. Bagian "Empat lapis lintas-modul" menjelaskan kenapa
 kontrol akses, scoping wilayah, antrean job, dan kuota langganan dikerjakan sebelum modul
-pertama, bukan sesudahnya.
+pertama, bukan sesudahnya. Cara memasang di VPS ada di `docs/06-deployment.md`; skrip
+pembaruan ada di `scripts/deploy.sh`.
 
 ## Empat lapis yang menopang semuanya
 

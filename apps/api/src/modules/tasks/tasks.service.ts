@@ -9,7 +9,8 @@ export type TaskType =
   | 'invoice.generate'
   | 'customer.import'
   | 'device.poll'
-  | 'report.snapshot';
+  | 'report.snapshot'
+  | 'hotspot.generate';
 
 @Injectable()
 export class TasksService {

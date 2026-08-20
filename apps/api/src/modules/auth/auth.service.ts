@@ -1,8 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { verify as verifyHash } from '@node-rs/argon2';
-import type { AuthUser, LoginInput, Role } from '@radgate/shared';
+import { hash, verify as verifyHash } from '@node-rs/argon2';
+import type { AuthUser, LoginInput, ProfilePatchInput, Role } from '@radgate/shared';
+import type { RequestScope } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 
 interface TokenPair {
@@ -89,6 +90,44 @@ export class AuthService {
     };
 
     return { user: authUser, ...(await this.issueTokens(authUser)) };
+  }
+
+  async profile(scope: RequestScope | undefined): Promise<AuthUser> {
+    if (!scope) throw new UnauthorizedException();
+    const user = await this.prisma.user.findFirst({
+      where: { id: scope.userId, status: 'aktif' },
+    });
+    if (!user) throw new UnauthorizedException('Akun tidak aktif');
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role as Role,
+      wilayahId: user.wilayahId,
+    };
+  }
+
+  async updateProfile(scope: RequestScope | undefined, input: ProfilePatchInput): Promise<AuthUser> {
+    if (!scope) throw new UnauthorizedException();
+    const user = await this.prisma.user.update({
+      where: { id: scope.userId },
+      data: {
+        ...(input.name != null ? { name: input.name } : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        ...(input.password ? { passwordHash: await hash(input.password) } : {}),
+      },
+    });
+    return {
+      id: user.id,
+      tenantId: user.tenantId,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role as Role,
+      wilayahId: user.wilayahId,
+    };
   }
 
   private async issueTokens(user: AuthUser): Promise<TokenPair> {

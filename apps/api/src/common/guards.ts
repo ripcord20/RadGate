@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import type { Role } from '@radgate/shared';
 import { PERMISSION_KEY, PUBLIC_KEY, type RequiredPermission } from './decorators';
-import { runWithScope, type RequestScope } from './request-context';
+import type { RequestScope } from './request-context';
 import { PermissionsService } from '../modules/permissions/permissions.service';
 
 interface AccessTokenPayload {
@@ -62,8 +62,9 @@ export class AuthGuard implements CanActivate {
     };
     request.scope = scope;
 
-    // Handler dijalankan di dalam scope. Guard berikutnya dan interceptor ikut mewarisinya.
-    return runWithScope(scope, () => true);
+    // Scope dipasang di request. AsyncLocalStorage diaktifkan oleh ScopeInterceptor,
+    // bukan di sini: guard selesai sebelum handler berjalan.
+    return true;
   }
 }
 

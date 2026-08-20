@@ -11,6 +11,7 @@ import {
   ROLES,
   TICKET_PRIORITIES,
   TICKET_STATUSES,
+  WA_PROVIDERS,
 } from './enums.js';
 
 /**
@@ -124,6 +125,65 @@ export const customerSchema = z
     path: ['longitude'],
   });
 export type CustomerInput = z.infer<typeof customerSchema>;
+
+/** Ubah pelanggan: password hanya dikirim jika diganti. */
+export const customerPatchSchema = z.object({
+  pppoeUsername: z
+    .string()
+    .trim()
+    .min(3)
+    .max(64)
+    .regex(/^[a-zA-Z0-9._@-]+$/)
+    .optional(),
+  pppoePassword: z.string().min(6).max(64).optional(),
+  packageId: uuid.optional(),
+  ipMode: z.enum(IP_MODES).optional(),
+  ipAddress: z.ipv4('Alamat IP tidak valid').nullish(),
+  email: z.string().trim().email().optional(),
+  appPassword: z.string().min(8).max(72).optional(),
+  name: z.string().trim().min(1).max(150).optional(),
+  phone: phoneSchema.optional(),
+  nik: z
+    .string()
+    .trim()
+    .regex(/^\d{16}$/)
+    .nullish(),
+  address: z.string().trim().min(1).max(500).optional(),
+  wilayahId: uuid.optional(),
+  billingType: z.enum(BILLING_TYPES).optional(),
+  installationDate: z.coerce.date().optional(),
+  dueDay: z.number().int().min(1).max(31).optional(),
+  installationFee: rupiah.optional(),
+  discount: rupiah.optional(),
+  notes: optionalText,
+  latitude: z.number().min(-90).max(90).nullish(),
+  longitude: z.number().min(-180).max(180).nullish(),
+  status: z.enum(CUSTOMER_STATUSES).optional(),
+});
+export type CustomerPatchInput = z.infer<typeof customerPatchSchema>;
+
+export const customerBulkStatusSchema = z.object({
+  ids: z.array(uuid).min(1),
+  status: z.enum(['expired', 'berhenti'] as const),
+});
+export type CustomerBulkStatusInput = z.infer<typeof customerBulkStatusSchema>;
+
+export const financeCategorySchema = z.object({
+  name: z.string().trim().min(1, 'Nama kategori wajib diisi').max(100),
+  type: z.enum(FINANCE_TYPES),
+  isActive: z.boolean().default(true),
+});
+export type FinanceCategoryInput = z.infer<typeof financeCategorySchema>;
+
+export const settingsPatchSchema = z.object({
+  companyName: z.string().trim().min(1).max(150).optional(),
+  address: z.string().trim().max(500).nullish(),
+  phone: z.string().trim().max(30).nullish(),
+  taxEnabled: z.boolean().optional(),
+  taxPercent: z.number().int().min(0).max(100).optional(),
+  timezone: z.string().trim().max(80).optional(),
+});
+export type SettingsPatchInput = z.infer<typeof settingsPatchSchema>;
 
 export const generateInvoiceSchema = z.object({
   periodMonth: z.number().int().min(1).max(12),
@@ -256,3 +316,95 @@ export const whatsappBroadcastSchema = z.object({
   scheduledAt: z.coerce.date().nullish(),
 });
 export type WhatsappBroadcastInput = z.infer<typeof whatsappBroadcastSchema>;
+
+export const hotspotProfileSchema = z.object({
+  name: z.string().trim().min(1, 'Nama profil wajib diisi').max(100),
+  mikrotikProfile: z.string().trim().max(100).nullish(),
+  speedUp: z.number().int().positive(),
+  speedDown: z.number().int().positive(),
+  durationMinutes: z.number().int().positive(),
+  dataQuotaMb: z.number().int().positive().nullish(),
+  price: rupiah,
+});
+export type HotspotProfileInput = z.infer<typeof hotspotProfileSchema>;
+
+export const odpSchema = z.object({
+  name: z.string().trim().min(1, 'Nama ODP wajib diisi').max(100),
+  code: z.string().trim().min(1).max(30),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  capacity: z.number().int().positive(),
+  wilayahId: uuid,
+  notes: optionalText,
+});
+export type OdpInput = z.infer<typeof odpSchema>;
+
+export const whatsappTemplateSchema = z.object({
+  name: z.string().trim().min(1, 'Nama template wajib diisi').max(100),
+  content: z.string().trim().min(1, 'Isi template wajib diisi').max(2000),
+  category: z.string().trim().max(50).nullish(),
+  variables: z.array(z.string().trim().min(1)).nullish(),
+});
+export type WhatsappTemplateInput = z.infer<typeof whatsappTemplateSchema>;
+
+export const whatsappDeviceSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  phoneNumber: phoneSchema,
+  provider: z.enum(WA_PROVIDERS),
+});
+export type WhatsappDeviceInput = z.infer<typeof whatsappDeviceSchema>;
+
+export const whatsappSendSchema = z.object({
+  deviceId: uuid,
+  phoneNumber: phoneSchema,
+  content: z.string().trim().min(1).max(2000),
+  customerId: uuid.nullish(),
+});
+export type WhatsappSendInput = z.infer<typeof whatsappSendSchema>;
+
+export const portForwardingSchema = z.object({
+  nasId: uuid,
+  name: z.string().trim().min(1).max(100),
+  protocol: z.enum(['tcp', 'udp']),
+  externalPort: z.number().int().min(1).max(65535),
+  internalIp: z.ipv4(),
+  internalPort: z.number().int().min(1).max(65535),
+});
+export type PortForwardingInput = z.infer<typeof portForwardingSchema>;
+
+export const aoSchema = z.object({
+  name: z.string().trim().min(1).max(150),
+  phone: phoneSchema,
+  wilayahId: uuid,
+  userId: uuid.nullish(),
+});
+export type AoInput = z.infer<typeof aoSchema>;
+
+export const speedOnDemandSchema = z.object({
+  customerId: uuid,
+  speedUp: z.number().int().positive(),
+  speedDown: z.number().int().positive(),
+  price: rupiah,
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+});
+export type SpeedOnDemandInput = z.infer<typeof speedOnDemandSchema>;
+
+export const profilePatchSchema = z.object({
+  name: z.string().trim().min(1).max(150).optional(),
+  phone: phoneSchema.nullish(),
+  password: z.string().min(8).max(72).optional(),
+});
+export type ProfilePatchInput = z.infer<typeof profilePatchSchema>;
+
+export const subscribeSchema = z.object({
+  planId: uuid,
+  billingCycle: z.enum(['monthly', 'yearly']),
+});
+export type SubscribeInput = z.infer<typeof subscribeSchema>;
+
+export const paymentCheckoutSchema = z.object({
+  invoiceId: uuid,
+  method: z.string().trim().min(1).max(50),
+});
+export type PaymentCheckoutInput = z.infer<typeof paymentCheckoutSchema>;
