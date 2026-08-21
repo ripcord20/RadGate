@@ -20,6 +20,20 @@ export interface JobData {
 export type JobHandler = (job: JobData) => Promise<void>;
 
 const QUEUE_NAME = 'radgate-jobs';
+const MIN_REDIS = [5, 0, 0] as const;
+
+function redisVersionAtLeast(info: string, min: readonly [number, number, number]): boolean {
+  const raw = /redis_version:(\S+)/.exec(info)?.[1];
+  if (!raw) return false;
+  const parts = raw.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < min.length; i += 1) {
+    const a = parts[i] ?? 0;
+    const b = min[i] ?? 0;
+    if (a > b) return true;
+    if (a < b) return false;
+  }
+  return true;
+}
 
 /**
  * Antrean Redis. HTTP hanya mendaftarkan baris `tasks` lalu mendorong job ke sini;
@@ -50,6 +64,13 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         connectTimeout: 3_000,
       });
       await this.connection.ping();
+      const info = await this.connection.info('server');
+      if (!redisVersionAtLeast(info, MIN_REDIS)) {
+        const version = /redis_version:(\S+)/.exec(info)?.[1] ?? 'tidak diketahui';
+        throw new Error(
+          `Redis ${version} terlalu lama untuk BullMQ (butuh >= 5.0). Job dijalankan sebaris di proses API.`,
+        );
+      }
       this.queue = new Queue<JobData>(QUEUE_NAME, { connection: this.connection });
       this.worker = new Worker<JobData>(QUEUE_NAME, (job) => this.execute(job), {
         connection: this.connection.duplicate(),
@@ -65,6 +86,8 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
         `Redis tidak tersedia, job dijalankan sebaris di proses API (${error instanceof Error ? error.message : 'gagal'})`,
       );
       this.inline = true;
+      this.queue = null;
+      this.worker = null;
       await this.connection?.quit().catch(() => undefined);
       this.connection = null;
     }
