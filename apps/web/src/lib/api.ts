@@ -87,10 +87,21 @@ function normalizeError(error: AxiosError<ApiError>): NormalizedError {
   }
 
   const body = error.response.data;
+  const message = typeof body?.message === 'string' ? body.message : undefined;
+  if (!message) {
+    // Vite mengembalikan 500 HTML saat API di :3000 belum jalan (ECONNREFUSED).
+    return {
+      statusCode: error.response.status,
+      message:
+        'Tidak dapat menghubungi server API. Pastikan jendela PowerShell kedua menjalankan npm run dev:api.',
+      isNetworkError: true,
+    };
+  }
+
   return {
     statusCode: error.response.status,
-    message: body?.message ?? 'Terjadi kesalahan yang tidak terduga.',
-    errors: body?.errors,
+    message,
+    errors: body.errors,
     isNetworkError: false,
   };
 }
