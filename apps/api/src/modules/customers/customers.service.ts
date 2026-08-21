@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 import type { CustomerBulkStatusInput, CustomerInput, CustomerPatchInput, CustomerStatus } from '@radgate/shared';
 import { CryptoService } from '../../common/crypto';
+import { NetworkClient } from '../../common/network.client';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { QuotaService } from '../../common/quota.service';
 import { requireScope, tenantWhere } from '../../common/request-context';
@@ -46,6 +47,7 @@ export class CustomersService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly quota: QuotaService,
+    private readonly network: NetworkClient,
   ) {}
 
   async list(query: ListQuery) {
@@ -103,35 +105,69 @@ export class CustomersService {
       where: { tenantId: scope.tenantId, wilayahId: input.wilayahId },
     });
     const customerCode = `${wilayah.code}-${String(count + 1).padStart(4, '0')}`;
+    const pppoePasswordEnc = this.crypto.encrypt(input.pppoePassword);
+    const appPasswordHash = await hash(input.appPassword);
 
     try {
-      const row = await this.prisma.customer.create({
-        data: {
-          tenantId: scope.tenantId,
-          wilayahId: input.wilayahId,
-          packageId: input.packageId,
-          customerCode,
-          name: input.name,
-          email: input.email,
-          phone: input.phone,
-          nik: input.nik,
-          address: input.address,
-          latitude: input.latitude ?? undefined,
-          longitude: input.longitude ?? undefined,
-          pppoeUsername: input.pppoeUsername,
-          pppoePasswordEnc: this.crypto.encrypt(input.pppoePassword),
-          ipMode: input.ipMode,
-          ipAddress: input.ipAddress ?? undefined,
-          appPasswordHash: await hash(input.appPassword),
-          billingType: input.billingType,
-          installationDate: input.installationDate,
-          dueDay: input.dueDay,
-          installationFee: input.installationFee,
-          discount: input.discount,
-          notes: input.notes ?? undefined,
-          status: input.status,
-        },
-        select: PUBLIC_SELECT,
+      const row = await this.prisma.withTenant(async (tx) => {
+        const created = await tx.customer.create({
+          data: {
+            tenantId: scope.tenantId,
+            wilayahId: input.wilayahId,
+            packageId: input.packageId,
+            customerCode,
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            nik: input.nik,
+            address: input.address,
+            latitude: input.latitude ?? undefined,
+            longitude: input.longitude ?? undefined,
+            pppoeUsername: input.pppoeUsername,
+            pppoePasswordEnc,
+            ipMode: input.ipMode,
+            ipAddress: input.ipAddress ?? undefined,
+            appPasswordHash,
+            billingType: input.billingType,
+            installationDate: input.installationDate,
+            dueDay: input.dueDay,
+            installationFee: input.installationFee,
+            discount: input.discount,
+            notes: input.notes ?? undefined,
+            status: input.status,
+          },
+          select: PUBLIC_SELECT,
+        });
+
+        for (const line of input.inventoryItems) {
+          const item = await tx.inventoryItem.findFirst({
+            where: { id: line.itemId, tenantId: scope.tenantId },
+          });
+          if (!item) throw new NotFoundException('Barang inventory tidak ditemukan');
+          const next = item.stock - line.quantity;
+          if (next < 0) throw new ConflictException(`Stok ${item.name} tidak mencukupi`);
+          await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: next } });
+          await tx.inventoryTransaction.create({
+            data: {
+              itemId: item.id,
+              type: 'out',
+              quantity: line.quantity,
+              stockAfter: next,
+              referenceType: 'customer',
+              referenceId: created.id,
+              notes: `Pemasangan ${customerCode}`,
+              createdBy: scope.userId,
+            },
+          });
+        }
+
+        await this.network.provisionPppoe({
+          username: input.pppoeUsername,
+          password: input.pppoePassword,
+          profile: pkg.mikrotikProfile ?? undefined,
+        });
+
+        return created;
       });
       await this.quota.bump('customers', 1);
       return row;

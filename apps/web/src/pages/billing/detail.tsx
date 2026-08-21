@@ -39,11 +39,27 @@ export default function BillingDetailPage() {
         title={data.invoiceNumber}
         description={data.customer?.name}
         actions={
-          can('billing', 'update') && data.status !== 'paid' ? (
-            <Button onClick={() => pay.mutate()} disabled={pay.isPending}>
-              Catat Lunas (Tunai)
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const res = await api.get(`/billing/${id}/invoice.pdf`, { responseType: 'blob' });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${data.invoiceNumber}.pdf`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Unduh PDF
             </Button>
-          ) : null
+            {can('billing', 'update') && data.status !== 'paid' ? (
+              <Button onClick={() => pay.mutate()} disabled={pay.isPending}>
+                Catat Lunas (Tunai)
+              </Button>
+            ) : null}
+          </div>
         }
       />
       <Card>

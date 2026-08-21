@@ -16,31 +16,23 @@ repo yang sudah mengurutkannya, atau `npm run build --workspace @radgate/shared`
 
 ## Yang sudah ada
 
-Fondasi lintas-modul dari Tahap 0 pada [`docs/05-roadmap.md`](../../docs/05-roadmap.md),
-yaitu bagian yang mahal kalau ditambahkan belakangan:
+Fondasi lintas-modul dari Tahap 0, plus modul bisnis (pelanggan sampai langganan).
+Lihat README di root repo untuk daftar lengkap.
 
-| Berkas | Isi |
-| --- | --- |
-| `common/request-context.ts` | Scope tenant dan wilayah lewat `AsyncLocalStorage` |
-| `common/guards.ts` | `AuthGuard` dan `PermissionsGuard`, terpasang global |
-| `common/decorators.ts` | `@Public`, `@RequirePermission`, `@CurrentUser` |
-| `common/zod-validation.pipe.ts` | Validasi memakai skema Zod yang sama dengan form frontend |
-| `prisma/prisma.service.ts` | Koneksi dan `withTenant()` untuk Row Level Security |
-| `modules/auth` | Login, refresh token berputar, logout |
-| `modules/permissions` | Peta izin per peran, dengan cache pendek |
-| `modules/bootstrap` | Satu endpoint untuk seluruh muatan app shell |
-| `modules/tasks` | Pendaftaran dan pemantauan job latar belakang |
+## Data awal
 
-## Yang belum ada
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
 
-Modul bisnis: pelanggan, tagihan, keuangan, inventory, jaringan, hotspot, tiket,
-reseller, WhatsApp, laporan, dan langganan. Kontraknya sudah dirancang di
-[`docs/03-api.md`](../../docs/03-api.md) dan tabelnya di
-[`docs/04-database.md`](../../docs/04-database.md). Urutan pengerjaan mengikuti
-[`docs/05-roadmap.md`](../../docs/05-roadmap.md).
+Login pengembangan: `owner@radgate.local` / `RadGate.dev1`. Ganti password setelah masuk.
+Ubah lewat `SEED_OWNER_EMAIL` dan `SEED_OWNER_PASSWORD` jika perlu.
 
-Skema Prisma saat ini memuat tabel yang sudah disentuh kode ditambah inti
-pelanggan-tagihan. Tabel sisanya ditambahkan per tahap, bukan sekaligus di awal.
+## Yang belum ada di mesin ini
+
+Integrasi perangkat sungguhan: RouterOS, FreeRADIUS, Baileys, Duitku, portal pelanggan,
+dan GenieACS. Itu layanan terpisah, bukan kekurangan skema di API billing.
 
 ## Dua hal yang mudah salah
 

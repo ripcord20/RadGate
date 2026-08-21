@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   generateInvoiceSchema,
   invoicePaymentSchema,
@@ -27,6 +28,15 @@ export class BillingController {
   @RequirePermission('billing', 'view')
   summary(@Query() query: Record<string, unknown>) {
     return this.billing.summary(parseListQuery(query).wilayahId);
+  }
+
+  @Get(':id/invoice.pdf')
+  @RequirePermission('billing', 'view')
+  @Header('Content-Type', 'application/pdf')
+  async invoicePdf(@Param('id') id: string, @Res() res: Response) {
+    const pdf = await this.billing.invoicePdf(id);
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.pdf"`);
+    res.send(Buffer.from(pdf));
   }
 
   @Get(':id')

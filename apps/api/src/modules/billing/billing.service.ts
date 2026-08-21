@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { GenerateInvoiceInput, InvoicePaymentInput, InvoiceStatus } from '@radgate/shared';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { requireScope, runWithScope, tenantWhere } from '../../common/request-context';
@@ -237,4 +238,49 @@ export class BillingService {
     const lastDay = new Date(year, month, 0).getDate();
     return new Date(year, month - 1, Math.min(dueDay, lastDay));
   }
+
+  async invoicePdf(id: string): Promise<Uint8Array> {
+    const invoice = await this.detail(id);
+    const settings = await this.prisma.setting.findUnique({
+      where: { tenantId: requireScope().tenantId },
+    });
+
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([595.28, 841.89]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const ink = rgb(0.12, 0.16, 0.22);
+    let y = 800;
+
+    const line = (text: string, size = 11, face = font) => {
+      page.drawText(latin(text), { x: 48, y, size, font: face, color: ink });
+      y -= size + 8;
+    };
+
+    line(settings?.companyName ?? 'RadGate', 18, bold);
+    line(`Invoice ${invoice.invoiceNumber}`, 14, bold);
+    line(`Pelanggan: ${invoice.customer.name}`);
+    line(`Kode: ${invoice.customer.customerCode}`);
+    line(`Wilayah: ${invoice.wilayah.name}`);
+    line(`Paket: ${invoice.package.name}`);
+    line(`Periode: ${invoice.periodMonth}/${invoice.periodYear}`);
+    line(`Jumlah: ${rupiah(invoice.amount)}`);
+    line(`Diskon: ${rupiah(invoice.discount)}`);
+    line(`Pajak: ${rupiah(invoice.tax)}`);
+    line(`Total: ${rupiah(invoice.total)}`, 13, bold);
+    line(`Status: ${invoice.status}`);
+    line(`Jatuh tempo: ${invoice.dueDate.toISOString().slice(0, 10)}`);
+    y -= 12;
+    line('Dokumen ini dihasilkan RadGate. Uang dalam rupiah penuh.', 9);
+
+    return pdf.save();
+  }
+}
+
+function latin(value: string) {
+  return value.replace(/[^\u0020-\u007E]/g, '?');
+}
+
+function rupiah(value: number) {
+  return `Rp ${value.toLocaleString('en-US')}`;
 }

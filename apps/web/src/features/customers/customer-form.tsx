@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import { Input, Textarea } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type PackageRow = { id: string; name: string; price: number };
+type InventoryRow = { id: string; name: string; code: string; stock: number };
 
 function Field({
   label,
@@ -49,6 +51,12 @@ export function CustomerForm({
     queryKey: qk.packages(null),
     queryFn: async () => (await api.get<Paginated<PackageRow>>('/internet-packages', { params: { perPage: 100 } })).data,
   });
+  const inventory = useQuery({
+    queryKey: qk.inventory(null),
+    queryFn: async () =>
+      (await api.get<Paginated<InventoryRow>>('/inventory/items', { params: { perPage: 100 } })).data,
+    enabled: mode === 'create',
+  });
 
   const form = useForm({
     resolver: zodResolver(mode === 'create' ? customerSchema : customerPatchSchema),
@@ -68,9 +76,14 @@ export function CustomerForm({
 
   const { register, handleSubmit, setValue, watch, formState } = form;
   const { errors } = formState;
+  const [stockOut, setStockOut] = useState<{ itemId: string; quantity: number }[]>([]);
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+    <form
+      className="space-y-4"
+      onSubmit={handleSubmit((values) => onSubmit({ ...values, inventoryItems: stockOut.filter((r) => r.itemId) }))}
+      noValidate
+    >
       <Section title="Layanan Internet">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Username PPPoE" required error={errors.pppoeUsername?.message}>
@@ -182,6 +195,58 @@ export function CustomerForm({
           </Field>
         </div>
       </Section>
+
+      {mode === 'create' && (
+        <Section title="Inventory Barang Keluar">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Stok dipotong dalam transaksi yang sama dengan pembuatan pelanggan.
+          </p>
+          {(stockOut).map((row, index) => (
+            <div key={`${row.itemId}-${index}`} className="mb-2 flex flex-wrap gap-2">
+              <select
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={row.itemId}
+                onChange={(e) => {
+                  const next = [...stockOut];
+                  next[index] = { ...row, itemId: e.target.value };
+                  setStockOut(next);
+                }}
+              >
+                <option value="">Pilih barang</option>
+                {inventory.data?.data.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.code} · {i.name} (stok {i.stock})
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                min={1}
+                className="max-w-24"
+                value={row.quantity}
+                onChange={(e) => {
+                  const next = [...stockOut];
+                  next[index] = { ...row, quantity: Number(e.target.value) };
+                  setStockOut(next);
+                }}
+              />
+              <Button type="button" variant="outline" onClick={() => setStockOut(stockOut.filter((_, i) => i !== index))}>
+                Hapus
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!inventory.data?.data.length}
+            onClick={() =>
+              setStockOut([...stockOut, { itemId: inventory.data?.data[0]?.id ?? '', quantity: 1 }])
+            }
+          >
+            Tambah barang
+          </Button>
+        </Section>
+      )}
 
       <div className="flex justify-end gap-2">
         <Button type="submit" disabled={submitting}>

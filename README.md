@@ -20,7 +20,10 @@ kode: `scripts/deploy.sh`.
 
 ```bash
 npm install
-npm run build --workspace @radgate/shared   # backend memakai hasil build paket ini
+cp apps/api/.env.example apps/api/.env   # sesuaikan DATABASE_URL dan JWT
+npm run build --workspace @radgate/shared
+npm run prisma:migrate --workspace @radgate/api
+npm run prisma:seed --workspace @radgate/api
 npm run dev                                 # frontend di http://localhost:5173
 npm run dev:api                             # backend di http://localhost:3000/v1
 ```

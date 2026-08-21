@@ -39,6 +39,8 @@ export class AuthService {
       throw new UnauthorizedException('Email atau password salah');
     }
 
+    await this.assertRecaptcha(input.recaptchaToken);
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -153,6 +155,30 @@ export class AuthService {
     const secret = this.config.get<string>('JWT_REFRESH_SECRET');
     if (!secret) throw new Error('JWT_REFRESH_SECRET belum diatur');
     return secret;
+  }
+
+  /**
+   * reCAPTCHA v3 wajib di produksi. Di pengembangan, token `dev` diterima selama
+   * `RECAPTCHA_SECRET` kosong, supaya login lokal tidak bergantung pada Google.
+   */
+  private async assertRecaptcha(token: string) {
+    const secret = this.config.get<string>('RECAPTCHA_SECRET') ?? '';
+    if (!secret) {
+      if (this.config.get('NODE_ENV') === 'production') {
+        throw new UnauthorizedException('reCAPTCHA belum dikonfigurasi');
+      }
+      return;
+    }
+    const body = new URLSearchParams({ secret, response: token });
+    const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    const data = (await res.json()) as { success?: boolean; score?: number };
+    if (!data.success || (data.score != null && data.score < 0.5)) {
+      throw new UnauthorizedException('Verifikasi reCAPTCHA gagal');
+    }
   }
 }
 
