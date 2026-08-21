@@ -38,11 +38,11 @@ export default function CustomerEditPage() {
         mode="edit"
         defaultValues={row}
         submitting={mutation.isPending}
-        onSubmit={(values) => {
+        onSubmit={(values, setError) => {
           mutation.mutate(values as CustomerInput, {
             onError: (error) => {
               const err = error as unknown as NormalizedError;
-              if (!applyServerErrors(err, () => undefined)) toast.error(err.message);
+              if (!applyServerErrors(err, setError)) toast.error(err.message);
             },
           });
         }}

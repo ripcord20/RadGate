@@ -115,9 +115,12 @@ export function applyServerErrors(
   setError: (field: string, err: { type: string; message: string }) => void,
 ): boolean {
   if (!error.errors) return false;
+  let mapped = false;
   for (const [field, messages] of Object.entries(error.errors)) {
     const message = messages[0];
-    if (message) setError(field, { type: 'server', message });
+    if (!message || field === '_') continue;
+    setError(field, { type: 'server', message });
+    mapped = true;
   }
-  return true;
+  return mapped;
 }

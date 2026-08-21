@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { customerPatchSchema, customerSchema, ROUTES, type CustomerInput, type Paginated } from '@radgate/shared';
 import { api } from '@/lib/api';
 import { qk } from '@/lib/query';
+import { toPhone62 } from '@/lib/utils';
 import { useApp } from '@/providers/app-provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,18 +23,20 @@ function Field({
   label,
   required,
   error,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
       <Label required={required}>{label}</Label>
       {children}
-      <FieldError message={error} />
+      {error ? <FieldError message={error} /> : hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -45,7 +49,10 @@ export function CustomerForm({
 }: {
   defaultValues?: Partial<CustomerInput>;
   submitting: boolean;
-  onSubmit: (values: unknown) => void;
+  onSubmit: (
+    values: unknown,
+    setError: (field: string, err: { type: string; message: string }) => void,
+  ) => void;
   mode?: 'create' | 'edit';
 }) {
   const { wilayahOptions, activeWilayahId, can } = useApp();
@@ -98,10 +105,33 @@ export function CustomerForm({
     if (next) setValue('wilayahId', next, { shouldValidate: true });
   }, [wilayahChoices, activeWilayahId, setValue, watch]);
 
+  useEffect(() => {
+    const list = packages.data?.data ?? [];
+    const current = watch('packageId');
+    if (current && list.some((p) => p.id === current)) return;
+    if (list[0]) setValue('packageId', list[0].id, { shouldValidate: true });
+  }, [packages.data, setValue, watch]);
+
   return (
     <form
       className="space-y-4"
-      onSubmit={handleSubmit((values) => onSubmit({ ...values, inventoryItems: stockOut.filter((r) => r.itemId) }))}
+      onSubmit={handleSubmit(
+        (values) =>
+          onSubmit(
+            {
+              ...values,
+              phone: toPhone62(values.phone),
+              inventoryItems: stockOut.filter((r) => r.itemId),
+            },
+            form.setError as (field: string, err: { type: string; message: string }) => void,
+          ),
+        (errs) => {
+          const first = Object.values(errs).find((e) => e && typeof e === 'object' && 'message' in e) as
+            | { message?: string }
+            | undefined;
+          toast.error(first?.message ?? 'Periksa isian yang bertanda merah');
+        },
+      )}
       noValidate
     >
       <Section title="Layanan Internet">
@@ -156,11 +186,16 @@ export function CustomerForm({
           <Field label="Nama Lengkap" required error={errors.name?.message}>
             <Input {...register('name')} />
           </Field>
-          <Field label="Nomor Telepon" required error={errors.phone?.message}>
-            <Input {...register('phone')} placeholder="Diawali dengan 62" />
+          <Field
+            label="Nomor Telepon"
+            required
+            error={errors.phone?.message}
+            hint="Contoh 6281234567890. Boleh 08…, akan diubah ke 62."
+          >
+            <Input {...register('phone')} placeholder="6281234567890" />
           </Field>
-          <Field label="NIK" required error={errors.nik?.message}>
-            <Input {...register('nik')} />
+          <Field label="NIK" required error={errors.nik?.message} hint="16 digit tanpa spasi atau tanda hubung">
+            <Input {...register('nik')} placeholder="3501234567890001" inputMode="numeric" />
           </Field>
           <Field label="Wilayah" required error={errors.wilayahId?.message}>
             <Select value={watch('wilayahId')} onValueChange={(v: string) => setValue('wilayahId', v, { shouldValidate: true })}>
@@ -212,6 +247,28 @@ export function CustomerForm({
           </Field>
           <Field label="Catatan" error={errors.notes?.message}>
             <Textarea {...register('notes')} />
+          </Field>
+          <Field
+            label="Latitude"
+            error={errors.latitude?.message}
+            hint="Opsional. Isi bersama longitude agar pelanggan tampil di peta."
+          >
+            <Input
+              type="number"
+              step="any"
+              {...register('latitude', {
+                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+              })}
+            />
+          </Field>
+          <Field label="Longitude" error={errors.longitude?.message}>
+            <Input
+              type="number"
+              step="any"
+              {...register('longitude', {
+                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+              })}
+            />
           </Field>
         </div>
       </Section>

@@ -18,9 +18,21 @@ import { useApp } from '@/providers/app-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
+import { DashboardMapPreview } from './map-preview';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Link } from 'react-router-dom';
+import { ROUTES } from '@radgate/shared';
 
 interface DashboardStats {
-  customers: { total: number; online: number; offline: number; expired: number; stopped: number };
+  customers: {
+    total: number;
+    online: number;
+    offline: number;
+    expired: number;
+    stopped: number;
+    aktif: number;
+    isolir: number;
+  };
   tickets: { total: number; open: number; inProgress: number; done: number };
   invoices: { total: number; paid: number; unpaid: number; overdue: number };
   finance: {
@@ -82,53 +94,6 @@ function StatRow({
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{children}</div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function MoneyCard({
-  title,
-  subtitle,
-  income,
-  expense,
-  profit,
-  loading,
-}: {
-  title: string;
-  subtitle: string;
-  income?: number;
-  expense?: number;
-  profit?: number;
-  loading: boolean;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {loading ? (
-          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)
-        ) : (
-          <>
-            <div className="rounded-md bg-success/10 p-3">
-              <p className="text-xs text-muted-foreground">Total Pendapatan</p>
-              <p className="tabular text-base font-semibold text-success">{formatRupiah(income)}</p>
-            </div>
-            <div className="rounded-md bg-destructive/10 p-3">
-              <p className="text-xs text-muted-foreground">Total Pengeluaran</p>
-              <p className="tabular text-base font-semibold text-destructive">
-                {formatRupiah(expense)}
-              </p>
-            </div>
-            <div className="rounded-md bg-primary/10 p-3">
-              <p className="text-xs text-muted-foreground">Profit</p>
-              <p className="tabular text-base font-semibold text-primary">{formatRupiah(profit)}</p>
-            </div>
-          </>
         )}
       </CardContent>
     </Card>
@@ -209,23 +174,99 @@ export default function DashboardPage() {
       </StatRow>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <MoneyCard
-          title="Bulan Ini"
-          subtitle={data?.finance.month.label ?? '-'}
-          income={data?.finance.month.income}
-          expense={data?.finance.month.expense}
-          profit={data?.finance.month.profit}
-          loading={isLoading}
-        />
-        <MoneyCard
-          title="Year to Date"
-          subtitle="Dari awal tahun sampai hari ini"
-          income={data?.finance.ytd.income}
-          expense={data?.finance.ytd.expense}
-          profit={data?.finance.ytd.profit}
-          loading={isLoading}
-        />
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Analisis pelanggan</CardTitle>
+            <Link to={ROUTES.reports.index} className="text-xs text-primary hover:underline">
+              Laporan
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-40" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Jumlah</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Aktif</TableCell>
+                    <TableCell>{formatNumber(c?.aktif)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Isolir</TableCell>
+                    <TableCell>{formatNumber(c?.isolir)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Expired</TableCell>
+                    <TableCell>{formatNumber(c?.expired)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Berhenti</TableCell>
+                    <TableCell>{formatNumber(c?.stopped)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Total</TableCell>
+                    <TableCell className="font-medium">{formatNumber(c?.total)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Online/offline menunggu data sesi RADIUS, jadi angkanya masih 0.
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Analisis keuangan</CardTitle>
+            <Link to={ROUTES.finances.index} className="text-xs text-primary hover:underline">
+              Keuangan
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-40" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead></TableHead>
+                    <TableHead>Bulan ini</TableHead>
+                    <TableHead>Year to date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Pendapatan</TableCell>
+                    <TableCell>{formatRupiah(data?.finance.month.income)}</TableCell>
+                    <TableCell>{formatRupiah(data?.finance.ytd.income)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Pengeluaran</TableCell>
+                    <TableCell>{formatRupiah(data?.finance.month.expense)}</TableCell>
+                    <TableCell>{formatRupiah(data?.finance.ytd.expense)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Profit</TableCell>
+                    <TableCell className="font-medium">{formatRupiah(data?.finance.month.profit)}</TableCell>
+                    <TableCell className="font-medium">{formatRupiah(data?.finance.ytd.profit)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Angka terisi setelah ada pembayaran tagihan atau transaksi di menu Keuangan.
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      <DashboardMapPreview wilayahId={activeWilayahId} />
     </div>
   );
 }

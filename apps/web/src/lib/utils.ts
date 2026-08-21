@@ -54,6 +54,18 @@ export function formatUptime(seconds: number | null | undefined): string {
   return `${minutes}m`;
 }
 
+/**
+ * Menyeragamkan input petugas ke 62xxx. 08…, +62, spasi, dan tanda hubung
+ * sering diketik di form; skema backend hanya menerima 62 diikuti digit.
+ */
+export function toPhone62(raw: string | null | undefined): string {
+  const digits = (raw ?? '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('62')) return digits;
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+  return digits;
+}
+
 /** Nomor disimpan sebagai 62xxx; ditampilkan berkelompok agar mudah dibaca petugas. */
 export function formatPhone(phone: string | null | undefined): string {
   if (!phone) return '-';

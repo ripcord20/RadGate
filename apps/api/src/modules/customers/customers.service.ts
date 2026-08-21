@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -105,7 +106,14 @@ export class CustomersService {
       where: { tenantId: scope.tenantId, wilayahId: input.wilayahId },
     });
     const customerCode = `${wilayah.code}-${String(count + 1).padStart(4, '0')}`;
-    const pppoePasswordEnc = this.crypto.encrypt(input.pppoePassword);
+    let pppoePasswordEnc: string;
+    try {
+      pppoePasswordEnc = this.crypto.encrypt(input.pppoePassword);
+    } catch {
+      throw new InternalServerErrorException(
+        'Kunci enkripsi perangkat belum valid. Isi DEVICE_ENCRYPTION_KEY (32 byte base64) di apps/api/.env, lalu jalankan ulang npm run dev:api.',
+      );
+    }
     const appPasswordHash = await hash(input.appPassword);
 
     try {

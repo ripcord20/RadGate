@@ -63,6 +63,8 @@ export class DashboardController {
         offline: 0,
         expired: Number(c.expired ?? 0),
         stopped: Number(c.berhenti ?? 0),
+        aktif: Number(c.aktif ?? 0),
+        isolir: Number(c.isolir ?? 0),
       },
       tickets: {
         total: ticketTotal,
