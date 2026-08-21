@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import type { MikrotikInput, NasInput, PortForwardingInput } from '@radgate/shared';
+import { ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
+import type { MikrotikInput, NasInput, NasMigrateInput, NasPatchInput, PortForwardingInput } from '@radgate/shared';
 import { CryptoService } from '../../common/crypto';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { QuotaService } from '../../common/quota.service';
@@ -26,14 +26,26 @@ export class ServersService implements OnModuleInit {
   async listNas(query: ListQuery) {
     const where = {
       ...tenantWhere(query.wilayahId),
-      ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: 'insensitive' as const } },
+              { description: { contains: query.search, mode: 'insensitive' as const } },
+              { ipAddress: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
     };
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.nas.count({ where }),
       this.prisma.nas.findMany({
         where,
-        include: { wilayah: { select: { name: true, code: true } } },
-        orderBy: { name: 'asc' },
+        include: {
+          wilayah: { select: { id: true, name: true, code: true } },
+          _count: { select: { customers: true } },
+        },
+        orderBy: [{ wilayah: { name: 'asc' } }, { name: 'asc' }],
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
       }),
@@ -60,6 +72,9 @@ export class ServersService implements OnModuleInit {
         ipAddress: input.ipAddress,
         secretEnc: this.crypto.encrypt(input.secret),
         type: input.type,
+        description: input.description ?? undefined,
+        connectionMode: input.connectionMode,
+        protocol: input.protocol ?? undefined,
         isDefault: input.isDefault || !hasDefault,
       },
     });
@@ -80,6 +95,78 @@ export class ServersService implements OnModuleInit {
       this.prisma.nas.update({ where: { id }, data: { isDefault: true } }),
     ]);
     return { ok: true, id };
+  }
+
+  async nasDetail(id: string, revealSecret = false) {
+    const row = await this.prisma.nas.findFirst({
+      where: { id, tenantId: requireScope().tenantId },
+      include: {
+        wilayah: { select: { id: true, name: true, code: true } },
+        _count: { select: { customers: true, portForwardings: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('NAS tidak ditemukan');
+    const { secretEnc, ...safe } = row;
+    return {
+      ...safe,
+      secret: revealSecret ? this.crypto.decrypt(secretEnc) : null,
+    };
+  }
+
+  async updateNas(id: string, input: NasPatchInput) {
+    const existing = await this.requireNas(id);
+    const onlyOffline = input.status === 'offline' && Object.keys(input).every((k) => k === 'status');
+    if (existing.status === 'online' && !onlyOffline) {
+      throw new ConflictException('NAS berstatus online tidak bisa diubah. Tandai offline terlebih dahulu.');
+    }
+    const row = await this.prisma.nas.update({
+      where: { id },
+      data: {
+        ...(input.name != null ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.ipAddress != null ? { ipAddress: input.ipAddress } : {}),
+        ...(input.secret ? { secretEnc: this.crypto.encrypt(input.secret) } : {}),
+        ...(input.type != null ? { type: input.type } : {}),
+        ...(input.connectionMode != null ? { connectionMode: input.connectionMode } : {}),
+        ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
+        ...(input.wilayahId != null ? { wilayahId: input.wilayahId } : {}),
+        ...(input.status != null ? { status: input.status } : {}),
+      },
+    });
+    const { secretEnc: _s, ...safe } = row;
+    return safe;
+  }
+
+  async removeNas(id: string) {
+    const existing = await this.requireNas(id);
+    if (existing.status === 'online') {
+      throw new ConflictException('NAS berstatus online tidak bisa dihapus. Tandai offline terlebih dahulu.');
+    }
+    const customers = await this.prisma.customer.count({ where: { nasId: id } });
+    if (customers > 0) {
+      throw new ConflictException(
+        `Masih ada ${customers} pelanggan di NAS ini. Pindahkan dulu lewat Migrasi.`,
+      );
+    }
+    await this.prisma.nas.delete({ where: { id } });
+    await this.quota.bump('nas', -1);
+    return { ok: true };
+  }
+
+  async migrateNas(input: NasMigrateInput) {
+    const from = await this.requireNas(input.fromNasId);
+    const to = await this.requireNas(input.toNasId);
+    const result = await this.prisma.customer.updateMany({
+      where: { nasId: from.id, tenantId: requireScope().tenantId, deletedAt: null },
+      data: { nasId: to.id },
+    });
+    return { moved: result.count, fromNasId: from.id, toNasId: to.id };
+  }
+
+  private async requireNas(id: string) {
+    const nas = await this.prisma.nas.findFirst({ where: { id, tenantId: requireScope().tenantId } });
+    if (!nas) throw new NotFoundException('NAS tidak ditemukan');
+    return nas;
   }
 
   listPorts(query: ListQuery) {

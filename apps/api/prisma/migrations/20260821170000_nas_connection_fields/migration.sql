@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "nas" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "nas" ADD COLUMN IF NOT EXISTS "connectionMode" TEXT NOT NULL DEFAULT 'direct';
+ALTER TABLE "nas" ADD COLUMN IF NOT EXISTS "protocol" TEXT;

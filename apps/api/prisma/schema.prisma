@@ -623,6 +623,9 @@ model Nas {
   type      String  @default("mikrotik")
   isDefault Boolean @default(false)
   status    String  @default("offline")
+  description    String?
+  connectionMode String  @default("direct")
+  protocol       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

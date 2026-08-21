@@ -258,13 +258,28 @@ export type InventoryMovementInput = z.infer<typeof inventoryMovementSchema>;
 
 export const nasSchema = z.object({
   name: z.string().trim().min(1, 'Nama NAS wajib diisi').max(100),
-  ipAddress: z.ipv4('Alamat IP tidak valid'),
+  description: z.string().trim().max(200).nullish(),
+  ipAddress: z.string().trim().min(1, 'Alamat server wajib diisi').max(255),
   secret: z.string().min(6, 'RADIUS secret minimal 6 karakter').max(128),
   type: z.string().trim().max(50).default('mikrotik'),
+  connectionMode: z.enum(['direct', 'vpn']).default('direct'),
+  protocol: z.string().trim().max(80).nullish(),
   wilayahId: uuid,
   isDefault: z.boolean().default(false),
 });
 export type NasInput = z.infer<typeof nasSchema>;
+
+export const nasPatchSchema = nasSchema.partial().extend({
+  secret: z.string().min(6).max(128).optional(),
+  status: z.enum(['online', 'offline']).optional(),
+});
+export type NasPatchInput = z.infer<typeof nasPatchSchema>;
+
+export const nasMigrateSchema = z.object({
+  fromNasId: uuid,
+  toNasId: uuid,
+}).refine((v) => v.fromNasId !== v.toNasId, { message: 'NAS asal dan tujuan harus berbeda' });
+export type NasMigrateInput = z.infer<typeof nasMigrateSchema>;
 
 export const mikrotikSchema = z.object({
   name: z.string().trim().min(1, 'Nama perangkat wajib diisi').max(100),

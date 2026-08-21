@@ -42,7 +42,7 @@ export const qk = {
   inventory: (wilayahId: string | null, params?: unknown) =>
     ['inventory', wilayahId, params] as const,
   resellers: (wilayahId: string | null) => ['resellers', wilayahId] as const,
-  nas: (wilayahId: string | null) => ['nas', wilayahId] as const,
+  nas: (wilayahId: string | null, params?: unknown) => ['nas', wilayahId, params] as const,
   mikrotik: (wilayahId: string | null) => ['mikrotik', wilayahId] as const,
   hotspot: (wilayahId: string | null, params?: unknown) => ['hotspot', wilayahId, params] as const,
   mapping: (wilayahId: string | null) => ['mapping', wilayahId] as const,
