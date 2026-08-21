@@ -9,16 +9,23 @@ export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async items(query: ListQuery) {
+    const scope = requireScope();
+    const selected = scope.wilayahId ?? query.wilayahId ?? null;
     const where = {
-      ...tenantWhere(query.wilayahId),
-      ...(query.search
-        ? {
-            OR: [
-              { name: { contains: query.search, mode: 'insensitive' as const } },
-              { code: { contains: query.search, mode: 'insensitive' as const } },
-            ],
-          }
-        : {}),
+      tenantId: scope.tenantId,
+      AND: [
+        ...(selected ? [{ OR: [{ wilayahId: selected }, { wilayahId: null }] }] : []),
+        ...(query.search
+          ? [
+              {
+                OR: [
+                  { name: { contains: query.search, mode: 'insensitive' as const } },
+                  { code: { contains: query.search, mode: 'insensitive' as const } },
+                ],
+              },
+            ]
+          : []),
+      ],
     };
     const [total, data] = await this.prisma.$transaction([
       this.prisma.inventoryItem.count({ where }),
@@ -46,20 +53,36 @@ export class InventoryService {
     });
   }
 
-  createItem(input: InventoryItemInput) {
+  async createItem(input: InventoryItemInput) {
     const scope = requireScope();
-    return this.prisma.inventoryItem.create({
-      data: {
-        tenantId: scope.tenantId,
-        categoryId: input.categoryId,
-        code: input.code,
-        name: input.name,
-        unit: input.unit,
-        unitPrice: input.unitPrice,
-        description: input.description ?? undefined,
-        wilayahId: input.wilayahId ?? undefined,
-        stock: 0,
-      },
+    const stock = input.stock ?? 0;
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.inventoryItem.create({
+        data: {
+          tenantId: scope.tenantId,
+          categoryId: input.categoryId,
+          code: input.code,
+          name: input.name,
+          unit: input.unit,
+          unitPrice: input.unitPrice,
+          description: input.description ?? undefined,
+          wilayahId: input.wilayahId ?? undefined,
+          stock,
+        },
+      });
+      if (stock > 0) {
+        await tx.inventoryTransaction.create({
+          data: {
+            itemId: item.id,
+            type: 'in',
+            quantity: stock,
+            stockAfter: stock,
+            notes: 'Stok awal',
+            createdBy: scope.userId,
+          },
+        });
+      }
+      return item;
     });
   }
 

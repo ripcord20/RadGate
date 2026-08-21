@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { customerPatchSchema, customerSchema, type CustomerInput, type Paginated } from '@radgate/shared';
+import { customerPatchSchema, customerSchema, ROUTES, type CustomerInput, type Paginated } from '@radgate/shared';
 import { api } from '@/lib/api';
 import { qk } from '@/lib/query';
 import { useApp } from '@/providers/app-provider';
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 type PackageRow = { id: string; name: string; price: number };
 type InventoryRow = { id: string; name: string; code: string; stock: number };
+type WilayahRow = { id: string; name: string; isActive: boolean };
 
 function Field({
   label,
@@ -46,10 +48,15 @@ export function CustomerForm({
   onSubmit: (values: unknown) => void;
   mode?: 'create' | 'edit';
 }) {
-  const { wilayahOptions, activeWilayahId } = useApp();
+  const { wilayahOptions, activeWilayahId, can } = useApp();
   const packages = useQuery({
     queryKey: qk.packages(null),
     queryFn: async () => (await api.get<Paginated<PackageRow>>('/internet-packages', { params: { perPage: 100 } })).data,
+  });
+  const wilayahList = useQuery({
+    queryKey: qk.wilayah,
+    queryFn: async () => (await api.get<Paginated<WilayahRow>>('/wilayah', { params: { perPage: 100 } })).data,
+    enabled: can('settings', 'view'),
   });
   const inventory = useQuery({
     queryKey: qk.inventory(null),
@@ -57,6 +64,10 @@ export function CustomerForm({
       (await api.get<Paginated<InventoryRow>>('/inventory/items', { params: { perPage: 100 } })).data,
     enabled: mode === 'create',
   });
+
+  const wilayahChoices =
+    wilayahList.data?.data.filter((w) => w.isActive).map((w) => ({ id: w.id, name: w.name })) ??
+    wilayahOptions.map((w) => ({ id: w.id, name: w.name }));
 
   const form = useForm({
     resolver: zodResolver(mode === 'create' ? customerSchema : customerPatchSchema),
@@ -77,6 +88,15 @@ export function CustomerForm({
   const { register, handleSubmit, setValue, watch, formState } = form;
   const { errors } = formState;
   const [stockOut, setStockOut] = useState<{ itemId: string; quantity: number }[]>([]);
+
+  useEffect(() => {
+    const current = watch('wilayahId');
+    if (current && wilayahChoices.some((w) => w.id === current)) return;
+    const next = activeWilayahId && wilayahChoices.some((w) => w.id === activeWilayahId)
+      ? activeWilayahId
+      : wilayahChoices[0]?.id;
+    if (next) setValue('wilayahId', next, { shouldValidate: true });
+  }, [wilayahChoices, activeWilayahId, setValue, watch]);
 
   return (
     <form
@@ -148,7 +168,7 @@ export function CustomerForm({
                 <SelectValue placeholder="Pilih wilayah" />
               </SelectTrigger>
               <SelectContent>
-                {wilayahOptions.map((w) => (
+                {wilayahChoices.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.name}
                   </SelectItem>
@@ -199,8 +219,19 @@ export function CustomerForm({
       {mode === 'create' && (
         <Section title="Inventory Barang Keluar">
           <p className="mb-3 text-xs text-muted-foreground">
-            Stok dipotong dalam transaksi yang sama dengan pembuatan pelanggan.
+            Opsional. Stok dipotong dalam transaksi yang sama dengan pembuatan pelanggan.
+            Barang dan stok diisi dulu di menu Inventory.
           </p>
+          {(inventory.data?.data.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Belum ada barang.{' '}
+              <Link to={ROUTES.inventory.index} className="text-primary hover:underline">
+                Tambah barang dan stok di Inventory
+              </Link>
+              , lalu kembali ke form ini.
+            </p>
+          ) : (
+            <>
           {(stockOut).map((row, index) => (
             <div key={`${row.itemId}-${index}`} className="mb-2 flex flex-wrap gap-2">
               <select
@@ -245,6 +276,8 @@ export function CustomerForm({
           >
             Tambah barang
           </Button>
+            </>
+          )}
         </Section>
       )}
 

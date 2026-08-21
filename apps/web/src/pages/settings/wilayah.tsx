@@ -30,10 +30,11 @@ export default function WilayahPage() {
     mutationFn: () => api.post('/wilayah', { name, code: code.toUpperCase(), isActive: true }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.wilayah });
+      await queryClient.refetchQueries({ queryKey: qk.bootstrap });
       await refresh();
       setName('');
       setCode('');
-      toast.success('Wilayah ditambahkan');
+      toast.success('Wilayah ditambahkan. Pilih di form pelanggan atau di pemilih wilayah atas.');
     },
     onError: (e: { message?: string }) => toast.error(e.message ?? 'Gagal'),
   });

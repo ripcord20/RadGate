@@ -145,7 +145,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       quota,
       hasQuotaLeft,
       logout,
-      refresh: () => queryClient.invalidateQueries({ queryKey: qk.bootstrap }),
+      refresh: () => queryClient.refetchQueries({ queryKey: qk.bootstrap }),
     }),
     [
       bootstrap,

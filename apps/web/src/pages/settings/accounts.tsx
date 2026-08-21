@@ -31,6 +31,7 @@ export default function AccountsPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('teknisi');
+  const [wilayahId, setWilayahId] = useState('');
 
   const create = useMutation({
     mutationFn: () =>
@@ -39,7 +40,7 @@ export default function AccountsPage() {
         email,
         password,
         role,
-        wilayahId: wilayahOptions[0]?.id ?? null,
+        wilayahId: wilayahId || null,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: qk.accounts });
@@ -73,6 +74,18 @@ export default function AccountsPage() {
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {r}
+              </option>
+            ))}
+          </select>
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={wilayahId}
+            onChange={(e) => setWilayahId(e.target.value)}
+          >
+            <option value="">Semua wilayah</option>
+            {wilayahOptions.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
               </option>
             ))}
           </select>

@@ -241,6 +241,8 @@ export const inventoryItemSchema = z.object({
   categoryId: uuid,
   unit: z.string().trim().min(1).max(20),
   unitPrice: rupiah.default(0),
+  /** Stok awal saat barang pertama kali dicatat. Boleh 0, lalu diisi lewat stok masuk. */
+  stock: z.number().int().min(0).optional(),
   description: optionalText,
   wilayahId: uuid.nullish(),
 });
