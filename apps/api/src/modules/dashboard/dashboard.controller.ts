@@ -18,7 +18,9 @@ export class DashboardController {
 
     const fromMonths = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-    const [customerGroups, invoiceGroups, ticketGroups, monthFinance, ytdFinance, defaultNas, packageGroups, monthRows] =
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const [customerGroups, invoiceGroups, ticketGroups, monthFinance, ytdFinance, defaultNas, packageGroups, monthRows, newThisMonth, newYtd, newLastMonth] =
       await Promise.all([
       this.prisma.customer.groupBy({
         by: ['status'],
@@ -57,6 +59,11 @@ export class DashboardController {
       this.prisma.financeTransaction.findMany({
         where: { ...base, transactionDate: { gte: fromMonths } },
         select: { type: true, amount: true, transactionDate: true },
+      }),
+      this.prisma.customer.count({ where: { ...base, deletedAt: null, createdAt: { gte: monthStart } } }),
+      this.prisma.customer.count({ where: { ...base, deletedAt: null, createdAt: { gte: yearStart } } }),
+      this.prisma.customer.count({
+        where: { ...base, deletedAt: null, createdAt: { gte: lastMonthStart, lt: monthStart } },
       }),
     ]);
 
@@ -111,6 +118,9 @@ export class DashboardController {
         stopped: Number(c.berhenti ?? 0),
         aktif: Number(c.aktif ?? 0),
         isolir: Number(c.isolir ?? 0),
+        newThisMonth,
+        newYtd,
+        newLastMonth,
       },
       tickets: {
         total: ticketTotal,

@@ -74,6 +74,10 @@ export function formatPhone(phone: string | null | undefined): string {
   return `+62 ${digits.slice(2).replace(/(\d{3})(?=\d)/g, '$1-')}`;
 }
 
+export function formatMonthYear(month: number, year: number): string {
+  return new Date(year, month - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+}
+
 export function initials(name: string): string {
   return name
     .split(/\s+/)

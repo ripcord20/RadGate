@@ -30,6 +30,9 @@ export class BillingService implements OnModuleInit {
             OR: [
               { invoiceNumber: { contains: query.search, mode: 'insensitive' as const } },
               { customer: { name: { contains: query.search, mode: 'insensitive' as const } } },
+              { customer: { phone: { contains: query.search } } },
+              { customer: { pppoeUsername: { contains: query.search, mode: 'insensitive' as const } } },
+              { customer: { customerCode: { contains: query.search, mode: 'insensitive' as const } } },
             ],
           }
         : {}),
@@ -40,7 +43,7 @@ export class BillingService implements OnModuleInit {
       this.prisma.invoice.findMany({
         where,
         include: {
-          customer: { select: { id: true, name: true, customerCode: true } },
+          customer: { select: { id: true, name: true, customerCode: true, phone: true, pppoeUsername: true } },
           package: { select: { id: true, name: true } },
           wilayah: { select: { id: true, name: true, code: true } },
         },
