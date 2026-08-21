@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
+import { FileDown, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
 import type { CustomerStatus, InvoiceStatus } from '@radgate/shared';
-import { api } from '@/lib/api';
+import { api, downloadAuthenticated } from '@/lib/api';
 import { qk } from '@/lib/query';
 import { formatRupiah } from '@/lib/utils';
 import { useActiveWilayah } from '@/providers/app-provider';
 import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
 import { Badge, CUSTOMER_STATUS_VARIANT, INVOICE_STATUS_LABEL, INVOICE_STATUS_VARIANT } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableEmpty, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -39,6 +42,18 @@ interface SummaryReport {
 export default function ReportsPage() {
   const wilayahId = useActiveWilayah();
 
+  const exportFile = async (kind: 'xlsx' | 'pdf') => {
+    try {
+      await downloadAuthenticated(
+        `/reports/export.${kind}`,
+        `laporan-radgate.${kind}`,
+        { wilayahId },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Gagal mengunduh laporan');
+    }
+  };
+
   const summary = useQuery({
     queryKey: qk.reports(wilayahId, 'summary'),
     queryFn: async () =>
@@ -68,6 +83,16 @@ export default function ReportsPage() {
           summary.data?.generatedAt
             ? `Snapshot ${new Date(summary.data.generatedAt).toLocaleString('id-ID')}`
             : 'Dibaca dari snapshot harian, bukan tabel mentah.'
+        }
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => void exportFile('xlsx')}>
+              <FileSpreadsheet /> Excel
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void exportFile('pdf')}>
+              <FileDown /> PDF
+            </Button>
+          </>
         }
       />
       <Tabs defaultValue="rekap">

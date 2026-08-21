@@ -1,20 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import type { MikrotikInput, NasInput, PortForwardingInput } from '@radgate/shared';
 import { CryptoService } from '../../common/crypto';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { QuotaService } from '../../common/quota.service';
-import { requireScope, runWithScope, tenantWhere } from '../../common/request-context';
+import { requireScope, tenantWhere } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 
 @Injectable()
-export class ServersService {
+export class ServersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly quota: QuotaService,
     private readonly tasks: TasksService,
   ) {}
+
+  onModuleInit() {
+    this.tasks.register('mikrotik.sync', async (job) => {
+      const ids = (job.payload.ids as string[] | undefined) ?? [];
+      await this.runSync(job.taskId, ids);
+    });
+  }
 
   async listNas(query: ListQuery) {
     const where = {
@@ -41,6 +48,10 @@ export class ServersService {
   async createNas(input: NasInput) {
     await this.quota.assertRemaining('nas');
     const scope = requireScope();
+    const hasDefault = await this.prisma.nas.findFirst({
+      where: { tenantId: scope.tenantId, isDefault: true },
+      select: { id: true },
+    });
     const row = await this.prisma.nas.create({
       data: {
         tenantId: scope.tenantId,
@@ -49,12 +60,26 @@ export class ServersService {
         ipAddress: input.ipAddress,
         secretEnc: this.crypto.encrypt(input.secret),
         type: input.type,
-        isDefault: input.isDefault,
+        isDefault: input.isDefault || !hasDefault,
       },
     });
     await this.quota.bump('nas', 1);
     const { secretEnc: _s, ...safe } = row;
     return safe;
+  }
+
+  async setDefaultNas(id: string) {
+    const scope = requireScope();
+    const nas = await this.prisma.nas.findFirst({ where: { id, tenantId: scope.tenantId } });
+    if (!nas) throw new NotFoundException('NAS tidak ditemukan');
+    await this.prisma.$transaction([
+      this.prisma.nas.updateMany({
+        where: { tenantId: scope.tenantId, isDefault: true },
+        data: { isDefault: false },
+      }),
+      this.prisma.nas.update({ where: { id }, data: { isDefault: true } }),
+    ]);
+    return { ok: true, id };
   }
 
   listPorts(query: ListQuery) {
@@ -127,8 +152,7 @@ export class ServersService {
       where: { id, tenantId: scope.tenantId },
     });
     if (!device) throw new NotFoundException('Perangkat Mikrotik tidak ditemukan');
-    const task = await this.tasks.enqueue('mikrotik.sync', { id });
-    void runWithScope(scope, () => this.runSync(task.id, [device.id]));
+    const task = await this.tasks.enqueueAndRun('mikrotik.sync', { ids: [device.id] });
     return { taskId: task.id };
   }
 
@@ -138,8 +162,8 @@ export class ServersService {
       where: { tenantId: scope.tenantId },
       select: { id: true },
     });
-    const task = await this.tasks.enqueue('mikrotik.sync', { all: true }, devices.length);
-    void runWithScope(scope, () => this.runSync(task.id, devices.map((d) => d.id)));
+    const ids = devices.map((d) => d.id);
+    const task = await this.tasks.enqueueAndRun('mikrotik.sync', { ids }, ids.length);
     return { taskId: task.id };
   }
 

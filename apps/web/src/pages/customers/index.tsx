@@ -9,6 +9,7 @@ import { qk } from '@/lib/query';
 import { formatPhone } from '@/lib/utils';
 import { useActiveWilayah, useApp } from '@/providers/app-provider';
 import { PageHeader } from '@/components/page-header';
+import { FilterBar, filterControlClass } from '@/components/filter-bar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge, CUSTOMER_STATUS_VARIANT } from '@/components/ui/badge';
@@ -27,6 +28,12 @@ interface CustomerRow {
   installationDate: string;
   wilayah: { name: string; code: string };
   package: { name: string; price: number };
+  odp: { name: string; code: string } | null;
+}
+
+interface PackageOption {
+  id: string;
+  name: string;
 }
 
 export default function CustomersPage() {
@@ -34,13 +41,20 @@ export default function CustomersPage() {
   const { can } = useApp();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [packageId, setPackageId] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: qk.customers(wilayahId, { search, status }),
+    queryKey: qk.customers(wilayahId, { search, status, packageId }),
     queryFn: async () =>
       (
         await api.get<Paginated<CustomerRow>>('/customers', {
-          params: { wilayahId, search: search || undefined, status: status || undefined, perPage: 50 },
+          params: {
+            wilayahId,
+            search: search || undefined,
+            status: status || undefined,
+            packageId: packageId || undefined,
+            perPage: 50,
+          },
         })
       ).data,
   });
@@ -48,6 +62,12 @@ export default function CustomersPage() {
   const summary = useQuery({
     queryKey: [...qk.customers(wilayahId), 'summary'],
     queryFn: async () => (await api.get('/customers/summary', { params: { wilayahId } })).data,
+  });
+
+  const packages = useQuery({
+    queryKey: qk.packages(wilayahId),
+    queryFn: async () =>
+      (await api.get<Paginated<PackageOption>>('/internet-packages', { params: { perPage: 100 } })).data,
   });
 
   return (
@@ -71,25 +91,39 @@ export default function CustomersPage() {
         }
       />
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <FilterBar
+        onReset={() => {
+          setSearch('');
+          setStatus('');
+          setPackageId('');
+        }}
+      >
         <Input
           placeholder="Cari nama, alamat, username..."
           className="max-w-sm"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
+        <select className={filterControlClass} value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Semua Status</option>
           <option value="aktif">Aktif</option>
           <option value="expired">Expired</option>
           <option value="berhenti">Berhenti</option>
           <option value="isolir">Isolir</option>
         </select>
-      </div>
+        <select
+          className={filterControlClass}
+          value={packageId}
+          onChange={(e) => setPackageId(e.target.value)}
+        >
+          <option value="">Semua Paket</option>
+          {packages.data?.data.map((pkg) => (
+            <option key={pkg.id} value={pkg.id}>
+              {pkg.name}
+            </option>
+          ))}
+        </select>
+      </FilterBar>
 
       <Table>
         <TableHeader>
@@ -97,16 +131,18 @@ export default function CustomersPage() {
             <TableHead>Pelanggan</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Paket & IP</TableHead>
+            <TableHead>ODP</TableHead>
             <TableHead>Alamat</TableHead>
             <TableHead>Telepon</TableHead>
             <TableHead>Jatuh Tempo</TableHead>
+            <TableHead>Instalasi</TableHead>
             <TableHead>Wilayah</TableHead>
             <TableHead>Aksi</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {!isLoading && (data?.data.length ?? 0) === 0 && (
-            <TableEmpty colSpan={8} message="Belum ada pelanggan" />
+            <TableEmpty colSpan={10} message="Belum ada pelanggan" />
           )}
           {data?.data.map((row) => (
             <TableRow key={row.id}>
@@ -123,9 +159,15 @@ export default function CustomersPage() {
                 <div>{row.package.name}</div>
                 <div className="text-xs text-muted-foreground">{row.ipAddress ?? 'DHCP'}</div>
               </TableCell>
+              <TableCell>{row.odp?.code ?? '-'}</TableCell>
               <TableCell className="max-w-48 truncate">{row.address}</TableCell>
               <TableCell>{formatPhone(row.phone)}</TableCell>
               <TableCell>Tanggal {row.dueDay}</TableCell>
+              <TableCell>
+                {row.installationDate
+                  ? new Date(row.installationDate).toLocaleDateString('id-ID')
+                  : '-'}
+              </TableCell>
               <TableCell>{row.wilayah.code}</TableCell>
               <TableCell className="space-x-2 whitespace-nowrap">
                 <Link className="text-sm text-primary hover:underline" to={`/customers/detail/${row.id}`}>

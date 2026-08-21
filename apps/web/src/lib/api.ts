@@ -124,3 +124,20 @@ export function applyServerErrors(
   }
   return mapped;
 }
+
+export async function downloadAuthenticated(
+  path: string,
+  filename: string,
+  params?: Record<string, unknown>,
+) {
+  const res = await api.get<Blob>(path, { params, responseType: 'blob' });
+  const blob = res.data;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

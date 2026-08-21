@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import type {
   WhatsappBroadcastInput,
   WhatsappDeviceInput,
@@ -7,13 +7,13 @@ import type {
 } from '@radgate/shared';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { QuotaService } from '../../common/quota.service';
-import { requireScope, runWithScope, tenantWhere } from '../../common/request-context';
+import { requireScope, tenantWhere } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { StubWhatsappGateway, type WhatsappGateway } from './whatsapp.gateway';
 
 @Injectable()
-export class WhatsappService {
+export class WhatsappService implements OnModuleInit {
   private readonly gateway: WhatsappGateway = new StubWhatsappGateway();
 
   constructor(
@@ -21,6 +21,13 @@ export class WhatsappService {
     private readonly quota: QuotaService,
     private readonly tasks: TasksService,
   ) {}
+
+  onModuleInit() {
+    this.tasks.register('whatsapp.broadcast', async (job) => {
+      const broadcastId = String(job.payload.broadcastId ?? '');
+      await this.runBroadcast(job.taskId, broadcastId, job.payload as unknown as WhatsappBroadcastInput);
+    });
+  }
 
   devices() {
     return this.prisma.whatsappDevice.findMany({
@@ -110,7 +117,7 @@ export class WhatsappService {
         scheduledAt: input.scheduledAt ?? undefined,
       },
     });
-    void runWithScope(scope, () => this.runBroadcast(task.id, row.id, input));
+    await this.tasks.dispatch(task.id, { ...(input as unknown as Record<string, unknown>), broadcastId: row.id });
     return { taskId: task.id, broadcastId: row.id };
   }
 

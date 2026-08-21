@@ -1,17 +1,23 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import type { GenerateInvoiceInput, InvoicePaymentInput, InvoiceStatus } from '@radgate/shared';
 import { paginated, type ListQuery } from '../../common/pagination';
-import { requireScope, runWithScope, tenantWhere } from '../../common/request-context';
+import { requireScope, tenantWhere } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 
 @Injectable()
-export class BillingService {
+export class BillingService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tasks: TasksService,
   ) {}
+
+  onModuleInit() {
+    this.tasks.register('invoice.generate', async (job) => {
+      await this.runGenerate(job.taskId, job.payload as unknown as GenerateInvoiceInput);
+    });
+  }
 
   async list(query: ListQuery, extra: { periodMonth?: number; periodYear?: number }) {
     const where = {
@@ -87,11 +93,7 @@ export class BillingService {
   }
 
   async generate(input: GenerateInvoiceInput) {
-    const scope = requireScope();
-    const task = await this.tasks.enqueue('invoice.generate', input as unknown as Record<string, unknown>);
-
-    void runWithScope(scope, () => this.runGenerate(task.id, input));
-
+    const task = await this.tasks.enqueueAndRun('invoice.generate', input as unknown as Record<string, unknown>);
     return { taskId: task.id };
   }
 

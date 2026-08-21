@@ -29,6 +29,12 @@ export class ServersController {
     return this.servers.createNas(body);
   }
 
+  @Post('nas/:id/default')
+  @RequirePermission('servers', 'update')
+  setDefaultNas(@Param('id') id: string) {
+    return this.servers.setDefaultNas(id);
+  }
+
   @Get('nas/port-forwarding')
   @RequirePermission('servers', 'view')
   listPorts(@Query() query: Record<string, unknown>) {

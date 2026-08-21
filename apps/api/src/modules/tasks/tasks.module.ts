@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { QueueService } from './queue.service';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 
@@ -9,7 +10,7 @@ import { TasksService } from './tasks.service';
 @Global()
 @Module({
   controllers: [TasksController],
-  providers: [TasksService],
+  providers: [QueueService, TasksService],
   exports: [TasksService],
 })
 export class TasksModule {}

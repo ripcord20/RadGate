@@ -8,6 +8,7 @@ export interface ListQuery {
   sortDir: 'asc' | 'desc';
   wilayahId?: string | null;
   status?: string;
+  packageId?: string;
 }
 
 /**
@@ -24,6 +25,8 @@ export function parseListQuery(query: Record<string, unknown>): ListQuery {
   const rawWilayah = query.wilayahId ?? query.wilayah_id;
   const wilayahId = typeof rawWilayah === 'string' && rawWilayah.length > 0 ? rawWilayah : null;
   const status = typeof query.status === 'string' && query.status.length > 0 ? query.status : undefined;
+  const rawPackage = query.packageId ?? query.package_id;
+  const packageId = typeof rawPackage === 'string' && rawPackage.length > 0 ? rawPackage : undefined;
 
   return {
     page,
@@ -33,6 +36,7 @@ export function parseListQuery(query: Record<string, unknown>): ListQuery {
     sortDir,
     wilayahId,
     status,
+    packageId,
   };
 }
 

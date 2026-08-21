@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { TaskStatus } from '@radgate/shared';
+import { requireScope, type RequestScope } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
-import { requireScope } from '../../common/request-context';
+import { QueueService, type JobData, type JobHandler } from './queue.service';
 
 export type TaskType =
   | 'mikrotik.sync'
@@ -16,7 +17,14 @@ export type TaskType =
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queue: QueueService,
+  ) {}
+
+  register(type: TaskType, handler: JobHandler) {
+    this.queue.register(type, handler);
+  }
 
   /**
    * Mendaftarkan job dan mengembalikan barisnya. Pemanggil mengembalikan `id` ke frontend,
@@ -43,6 +51,25 @@ export class TasksService {
 
     this.logger.log(`Job ${type} didaftarkan sebagai ${task.id}`);
     return task;
+  }
+
+  async enqueueAndRun(type: TaskType, payload: Record<string, unknown>, total = 0) {
+    const scope = requireScope();
+    const task = await this.enqueue(type, payload, total);
+    await this.dispatch(task.id, payload, scope);
+    return task;
+  }
+
+  async dispatch(taskId: string, payload: Record<string, unknown>, scope?: RequestScope) {
+    const resolved = scope ?? requireScope();
+    const task = await this.prisma.task.findFirst({ where: { id: taskId, tenantId: resolved.tenantId } });
+    const data: JobData = {
+      taskId,
+      type: (task?.type ?? 'invoice.generate') as TaskType,
+      scope: resolved,
+      payload,
+    };
+    await this.queue.dispatch(data);
   }
 
   async listRunning() {

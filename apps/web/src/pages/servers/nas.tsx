@@ -15,6 +15,7 @@ interface NasRow {
   name: string;
   ipAddress: string;
   status: string;
+  isDefault: boolean;
   wilayah: { name: string };
 }
 
@@ -51,6 +52,16 @@ export default function NasPage() {
     onError: (e: { message?: string }) => toast.error(e.message ?? 'Gagal'),
   });
 
+  const setDefault = useMutation({
+    mutationFn: (id: string) => api.post(`/nas/${id}/default`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['nas'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('NAS default disimpan');
+    },
+    onError: (e: { message?: string }) => toast.error(e.message ?? 'Gagal'),
+  });
+
   return (
     <div>
       <PageHeader title="Network Access Server" quota="nas" />
@@ -68,11 +79,27 @@ export default function NasPage() {
         {data?.data.map((n) => (
           <Card key={n.id}>
             <CardHeader>
-              <CardTitle>{n.name}</CardTitle>
+              <CardTitle className="flex items-center justify-between gap-2">
+                <span>{n.name}</span>
+                {n.isDefault && (
+                  <span className="text-xs font-normal text-primary">Default</span>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               <p>{n.ipAddress}</p>
               <p>{n.wilayah?.name}</p>
+              {can('servers', 'update') && !n.isDefault && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  disabled={setDefault.isPending}
+                  onClick={() => setDefault.mutate(n.id)}
+                >
+                  Jadikan default
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}

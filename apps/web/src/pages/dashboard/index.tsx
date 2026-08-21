@@ -18,8 +18,10 @@ import { useApp } from '@/providers/app-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { DashboardMapPreview } from './map-preview';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DashboardMapPreview } from './map-preview';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '@radgate/shared';
 
@@ -38,7 +40,10 @@ interface DashboardStats {
   finance: {
     month: { income: number; expense: number; profit: number; label: string };
     ytd: { income: number; expense: number; profit: number };
+    months: { key: string; label: string; income: number; expense: number }[];
   };
+  packages: { name: string; count: number }[];
+  defaultNas: { id: string; name: string } | null;
 }
 
 function StatItem({
@@ -127,6 +132,20 @@ export default function DashboardPage() {
         description={bootstrap?.settings.companyName}
         quota="customers"
       />
+
+      {data && !data.defaultNas && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 pt-4 text-sm">
+            <p>
+              Pilih satu NAS sebagai server default supaya monitoring realtime bisa diaktifkan setelah
+              RADIUS terhubung.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link to={ROUTES.servers.nas}>Buka NAS</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <StatRow title="Pelanggan" icon={Users} loading={isLoading}>
         <StatItem icon={Users} label="Total Pelanggan" value={formatNumber(c?.total)} />
@@ -262,6 +281,60 @@ export default function DashboardPage() {
             <p className="mt-2 text-xs text-muted-foreground">
               Angka terisi setelah ada pembayaran tagihan atau transaksi di menu Keuangan.
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle>Pendapatan dan pengeluaran 12 bulan</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            {isLoading ? (
+              <Skeleton className="h-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data?.finance.months ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" fontSize={12} />
+                  <YAxis fontSize={12} tickFormatter={(v: number) => `${Math.round(v / 1000)}rb`} />
+                  <Tooltip formatter={(value) => formatRupiah(Number(value ?? 0))} />
+                  <Legend />
+                  <Bar dataKey="income" name="Pendapatan" fill="var(--color-primary, #2563eb)" radius={2} />
+                  <Bar dataKey="expense" name="Pengeluaran" fill="var(--color-destructive, #dc2626)" radius={2} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Distribusi paket</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-40" />
+            ) : (data?.packages.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">Belum ada pelanggan.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Paket</TableHead>
+                    <TableHead>Jumlah</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.packages.map((pkg) => (
+                    <TableRow key={pkg.name}>
+                      <TableCell>{pkg.name}</TableCell>
+                      <TableCell>{formatNumber(pkg.count)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

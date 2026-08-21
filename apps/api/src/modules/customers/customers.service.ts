@@ -40,6 +40,7 @@ const PUBLIC_SELECT = {
   updatedAt: true,
   wilayah: { select: { id: true, name: true, code: true } },
   package: { select: { id: true, name: true, price: true, speedUp: true, speedDown: true } },
+  odp: { select: { id: true, name: true, code: true } },
 } satisfies Prisma.CustomerSelect;
 
 @Injectable()
@@ -256,6 +257,7 @@ export class CustomersService {
       ...base,
       deletedAt: null,
       ...(status ? { status } : {}),
+      ...(query.packageId ? { packageId: query.packageId } : {}),
       ...(query.search
         ? {
             OR: [

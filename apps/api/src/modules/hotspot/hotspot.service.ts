@@ -1,19 +1,25 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import type { HotspotProfileInput, HotspotVoucherBatchInput } from '@radgate/shared';
 import { paginated, type ListQuery } from '../../common/pagination';
 import { QuotaService } from '../../common/quota.service';
-import { requireScope, runWithScope, tenantWhere } from '../../common/request-context';
+import { requireScope, tenantWhere } from '../../common/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 
 @Injectable()
-export class HotspotService {
+export class HotspotService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly quota: QuotaService,
     private readonly tasks: TasksService,
   ) {}
+
+  onModuleInit() {
+    this.tasks.register('hotspot.generate', async (job) => {
+      await this.runGenerate(job.taskId, job.payload as unknown as HotspotVoucherBatchInput);
+    });
+  }
 
   profiles() {
     return this.prisma.hotspotProfile.findMany({
@@ -52,9 +58,11 @@ export class HotspotService {
 
   async generate(input: HotspotVoucherBatchInput) {
     await this.quota.assertRemaining('hotspot_vouchers');
-    const scope = requireScope();
-    const task = await this.tasks.enqueue('hotspot.generate', input as unknown as Record<string, unknown>, input.quantity);
-    void runWithScope(scope, () => this.runGenerate(task.id, input));
+    const task = await this.tasks.enqueueAndRun(
+      'hotspot.generate',
+      input as unknown as Record<string, unknown>,
+      input.quantity,
+    );
     return { taskId: task.id };
   }
 
